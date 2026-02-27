@@ -1,6 +1,6 @@
 {
   "name": "mindbox-insales-widget",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Mindbox widget for inSales",
   "packageManager": "npm@11.11.0",
