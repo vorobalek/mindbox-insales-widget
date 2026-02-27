@@ -1,0 +1,15 @@
+{
+  "type": "SimpleWidgetType",
+  "handle": "mindbox",
+  "page_kinds": ["all"],
+  "widget_list_kinds": ["header"],
+  "generation": 4,
+  "name": {
+    "ru": "Mindbox"
+  },
+  "description": {
+    "ru": null
+  },
+  "widget_category_handle": "headers",
+  "libraries": ["commonjs_v2"]
+}

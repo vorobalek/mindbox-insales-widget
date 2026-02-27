@@ -1,0 +1,17 @@
+# inSales themes support matrix: latest 2 versions of Chrome, Safari, Firefox, Opera, Edge, Yandex.
+# Browserslist has no dedicated Yandex browser token, so Chromium compatibility is covered by Chrome rules.
+[production]
+last 2 Chrome versions
+last 2 Safari versions
+last 2 Firefox versions
+last 2 Opera versions
+last 2 Edge versions
+last 2 iOS major versions
+last 2 ChromeAndroid versions
+last 2 FirefoxAndroid versions
+last 2 OperaMobile versions
+
+[development]
+last 1 Chrome version
+last 1 Firefox version
+last 1 Safari version

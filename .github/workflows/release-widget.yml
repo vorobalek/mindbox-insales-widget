@@ -1,0 +1,203 @@
+name: Release Widget
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: widget-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup latest LTS Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Update npm to latest
+        run: |
+          set -euo pipefail
+          npm install --global npm@latest
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_version="$(node -p "require('./package.json').version")"
+          if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "package.json version must be semver in format X.Y.Z, got: $current_version"
+            exit 1
+          fi
+
+          tag="v${current_version}"
+          tag_exists="false"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            tag_exists="true"
+          fi
+
+          should_release="true"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            before_sha="${{ github.event.before }}"
+            if [[ -n "$before_sha" ]] && [[ ! "$before_sha" =~ ^0+$ ]]; then
+              previous_version="$(git show "${before_sha}:package.json" 2>/dev/null | node -e "let data='';process.stdin.on('data',chunk=>data+=chunk);process.stdin.on('end',()=>{if (!data) { process.stdout.write(''); return; } const parsed=JSON.parse(data); process.stdout.write(String(parsed.version ?? ''));});")"
+              if [[ -n "$previous_version" ]] && [[ "$previous_version" == "$current_version" ]]; then
+                should_release="false"
+              fi
+            fi
+          fi
+
+          echo "current=$current_version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
+      - name: Skip release when version is unchanged
+        if: steps.version.outputs.should_release != 'true'
+        run: |
+          set -euo pipefail
+          echo "Skipping release: package version is unchanged relative to previous main commit."
+
+      - name: Build widget scripts
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Run tests with coverage
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          npm run test:coverage
+
+      - name: Install Playwright browser
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          npm run test:e2e
+
+      - name: Apply release version to widget metadata
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          node scripts/apply-widget-version.mjs --dist-dir dist --version "${{ steps.version.outputs.current }}"
+
+      - name: Build minified widget scripts
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          npm exec vite build -- --outDir dist-min --emptyOutDir --minify esbuild
+
+      - name: Apply release version to minified widget metadata
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          node scripts/apply-widget-version.mjs --dist-dir dist-min --min --version "${{ steps.version.outputs.current }}"
+
+      - name: Build widget archives
+        if: steps.version.outputs.should_release == 'true'
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version.outputs.current }}"
+          regular_archive_name="mindbox-widget-v${version}.zip"
+          min_archive_name="mindbox-widget-v${version}-min.zip"
+
+          required_files_regular=(
+            "dist/info.json"
+            "dist/settings_data.json"
+            "dist/settings_form.json"
+            "dist/snippet.js"
+            "dist/snippet.liquid"
+          )
+
+          required_files_min=(
+            "dist-min/info.json"
+            "dist-min/settings_data.json"
+            "dist-min/settings_form.json"
+            "dist-min/snippet.js"
+            "dist-min/snippet.liquid"
+          )
+
+          for file in "${required_files_regular[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Build artifact missing: $file"
+              exit 1
+            fi
+          done
+
+          for file in "${required_files_min[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Build artifact missing: $file"
+              exit 1
+            fi
+          done
+
+          zip -j "dist/${regular_archive_name}" \
+            dist/info.json \
+            dist/settings_data.json \
+            dist/settings_form.json \
+            dist/snippet.js \
+            dist/snippet.liquid
+
+          zip -j "dist/${min_archive_name}" \
+            dist-min/info.json \
+            dist-min/settings_data.json \
+            dist-min/settings_form.json \
+            dist-min/snippet.js \
+            dist-min/snippet.liquid
+
+          echo "path_regular=dist/${regular_archive_name}" >> "$GITHUB_OUTPUT"
+          echo "path_min=dist/${min_archive_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag release
+        if: steps.version.outputs.should_release == 'true' && steps.version.outputs.tag_exists != 'true'
+        run: |
+          set -euo pipefail
+          git tag "${{ steps.version.outputs.tag }}"
+
+      - name: Push tag
+        if: steps.version.outputs.should_release == 'true' && steps.version.outputs.tag_exists != 'true'
+        run: |
+          set -euo pipefail
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.archive.outputs.path_regular }}
+            ${{ steps.archive.outputs.path_min }}
