@@ -1,0 +1,44 @@
+{% assign mindbox_endpoint_id = widget_settings.endpoint_id | default: '' | strip %}
+{% assign mindbox_api_domain = widget_settings.api_domain | default: '' | strip | replace: 'https://', '' | replace: 'http://', '' | split: '/' | first %}
+
+<script>
+  mindbox = window.mindbox || function() { mindbox.queue.push(arguments); };
+  mindbox.queue = mindbox.queue || [];
+  mindbox('create', {
+    {% if mindbox_endpoint_id != '' %}
+    endpointId: {{ mindbox_endpoint_id | json }}
+    {% endif %}
+  });
+  mindbox("webpush.create");
+</script>
+
+{% if mindbox_api_domain != '' %}
+<script src="https://{{ mindbox_api_domain }}/scripts/v1/tracker.js" async></script>
+{% endif %}
+
+<script>
+  (function(widget) {
+    widget.config = {
+      apiDomain: {{ widget_settings.api_domain | json }},
+      idKey: {{ widget_settings.external_system_name | json }},
+      operations: {
+        viewCategory: {{ widget_settings.operation_view_category | json }},
+        viewProduct: {{ widget_settings.operation_view_product | json }},
+        setCart: {{ widget_settings.operation_set_cart | json }},
+        clearCart: {{ widget_settings.operation_clear_cart | json }},
+        setWishList: {{ widget_settings.operation_set_wishlist | json }},
+        clearWishList: {{ widget_settings.operation_clear_wishlist | json }}
+      },
+      page: {
+        template: {{ template | json }},
+        collectionId: {% if collection %}{{ collection.id | json }}{% else %}null{% endif %},
+        productId: {% if product %}{{ product.id | json }}{% else %}null{% endif %},
+        productPrice: {% if product %}{{ product.price | json }}{% else %}null{% endif %}
+      }
+    };
+
+    if (typeof widget.init === 'function') {
+      widget.init();
+    }
+  })(window.__mindboxInSalesWidget = window.__mindboxInSalesWidget || {});
+</script>

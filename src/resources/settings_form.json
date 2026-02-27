@@ -1,0 +1,68 @@
+{
+  "Mindbox": [
+    {
+      "group_name": "Подключение",
+      "items": [
+        {
+          "name": "api_domain",
+          "type": "text",
+          "label": "Домен API",
+          "hint": "Домен API Mindbox без https://."
+        },
+        {
+          "name": "endpoint_id",
+          "type": "text",
+          "label": "Точка интеграции",
+          "hint": "Системное имя Точки интеграции в Mindbox."
+        },
+        {
+          "name": "external_system_name",
+          "type": "text",
+          "label": "Внешняя система",
+          "hint": "Системное имя Внешней системы продуктов и заказов в Mindbox."
+        }
+      ]
+    },
+    {
+      "group_name": "Операции",
+      "items": [
+        {
+          "name": "operation_view_category",
+          "type": "text",
+          "label": "Просмотр категории",
+          "hint": "Системное имя Операции просмотра категории в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_view_product",
+          "type": "text",
+          "label": "Просмотр продукта",
+          "hint": "Системное имя Операции просмотра продукта в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_set_cart",
+          "type": "text",
+          "label": "Установка корзины",
+          "hint": "Системное имя Операции установки корзины в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_clear_cart",
+          "type": "text",
+          "label": "Очистка корзины",
+          "hint": "Системное имя Операции очистки корзины в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_set_wishlist",
+          "type": "text",
+          "label": "Установка Избранного",
+          "hint": "Системное имя Операции установки избранного в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_clear_wishlist",
+          "type": "text",
+          "label": "Очистка Избранного",
+          "hint": "Системное имя Операции очистки избранного в Mindbox. Если пусто, событие не отправляется."
+        }
+      ]
+    }
+  ]
+}

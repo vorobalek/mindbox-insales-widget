@@ -1,0 +1,10 @@
+{
+  "api_domain": "api.mindbox.ru",
+  "external_system_name": "website",
+  "operation_view_category": "Website.ViewCategory",
+  "operation_view_product": "Website.ViewProduct",
+  "operation_set_cart": "Website.SetCart",
+  "operation_clear_cart": "Website.ClearCart",
+  "operation_set_wishlist": "Website.SetWishList",
+  "operation_clear_wishlist": "Website.ClearWishList"
+}

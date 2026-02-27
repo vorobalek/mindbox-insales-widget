@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    (function() {
+      const subscribers = {};
+      window.__mindboxCalls = [];
+      window.EventBus = {
+        subscribe: function(eventName, handler) {
+          if (!subscribers[eventName]) {
+            subscribers[eventName] = [];
+          }
+          subscribers[eventName].push(handler);
+        }
+      };
+      window.__emitEventBus = function(eventName, payload) {
+        const handlers = subscribers[eventName] || [];
+        handlers.forEach(function(handler) {
+          handler(payload);
+        });
+      };
+    })();
+  </script>
+  {% capture content_for_layout %}
+    {% render 'entrypoint-page',
+      widget_settings: widget_settings,
+      template: template,
+      collection: collection,
+      product: product
+    %}
+  {% endcapture %}
+  {{ content_for_layout }}
+  <script type="module" src="/src/snippet.ts"></script>
+</head>
+<body></body>
+</html>
