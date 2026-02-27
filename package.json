@@ -1,0 +1,14 @@
+{
+  "name": "mindbox-insales-widget",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bootstrap baseline for PR policy checks",
+  "scripts": {
+    "lint": "echo 'Baseline lint check'",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "vitest": "^4.0.18"
+  }
+}

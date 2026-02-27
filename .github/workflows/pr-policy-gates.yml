@@ -1,0 +1,271 @@
+name: PR Policy Gates
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: read
+  statuses: write
+
+jobs:
+  policy-gates:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      OVERRIDE_LABEL: policy-exception
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Resolve PR commit range
+        id: range
+        run: |
+          set -euo pipefail
+
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          base_ref="origin/${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          merge_base="$(git merge-base "$base_ref" "$head_sha")"
+          if [[ -z "$merge_base" ]]; then
+            echo "Could not resolve merge base for PR range." >&2
+            exit 1
+          fi
+
+          echo "from=$merge_base" >> "$GITHUB_OUTPUT"
+          echo "to=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Validate conventional commits
+        run: |
+          set -euo pipefail
+          npx commitlint --from "${{ steps.range.outputs.from }}" --to "${{ steps.range.outputs.to }}" --verbose
+
+      - name: Detect PR bump type
+        id: bump
+        run: |
+          set -euo pipefail
+
+          from="${{ steps.range.outputs.from }}"
+          to="${{ steps.range.outputs.to }}"
+          bump_type="patch"
+          major_prefix_re='^[[:alpha:]]+(\([^)]+\))?!:'
+          minor_prefix_re='^feat(\([^)]+\))?:'
+
+          while IFS= read -r commit_sha; do
+            if [[ -z "$commit_sha" ]]; then
+              continue
+            fi
+
+            message="$(git show -s --format=%B "$commit_sha")"
+            first_line="${message%%$'\n'*}"
+
+            if [[ "$message" == *"BREAKING CHANGE:"* ]] || [[ "$first_line" =~ $major_prefix_re ]]; then
+              bump_type="major"
+              break
+            fi
+
+            if [[ "$first_line" =~ $minor_prefix_re ]]; then
+              bump_type="minor"
+            fi
+          done < <(git rev-list --reverse "$from..$to")
+
+          echo "type=$bump_type" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare PR package version for main
+        id: sync_version
+        if: github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+        run: |
+          set -euo pipefail
+
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "desired_version=" >> "$GITHUB_OUTPUT"
+
+          base_version="$(git show "origin/${BASE_REF}:package.json" | node -e "let data='';process.stdin.on('data',chunk=>data+=chunk);process.stdin.on('end',()=>{const parsed=JSON.parse(data);process.stdout.write(String(parsed.version ?? ''));});")"
+          if [[ ! "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Base version must be semver X.Y.Z, got: $base_version" >&2
+            exit 1
+          fi
+
+          IFS='.' read -r major minor patch <<< "$base_version"
+          case "$BUMP_TYPE" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+            *)
+              echo "Unsupported bump type: $BUMP_TYPE" >&2
+              exit 1
+              ;;
+          esac
+
+          desired_version="${major}.${minor}.${patch}"
+          current_version="$(node -p "require('./package.json').version")"
+
+          echo "Base version: $base_version"
+          echo "Bump type: $BUMP_TYPE"
+          echo "Desired PR version: $desired_version"
+          echo "Current PR version: $current_version"
+
+          if [[ "$current_version" == "$desired_version" ]]; then
+            echo "PR version is already aligned with target branch."
+            exit 0
+          fi
+
+          npm version "$desired_version" --no-git-tag-version
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No version diff to commit."
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "desired_version=$desired_version" >> "$GITHUB_OUTPUT"
+
+      - name: Run lint policy checks
+        run: |
+          set -euo pipefail
+          npm run lint
+
+      - name: Resolve override label
+        id: labels
+        run: |
+          set -euo pipefail
+
+          has_override="$(jq -r --arg label "$OVERRIDE_LABEL" 'any(.pull_request.labels[]?; .name == $label)' "$GITHUB_EVENT_PATH")"
+          echo "has_override=$has_override" >> "$GITHUB_OUTPUT"
+          echo "base_ref=${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+
+      - name: Audit production dependencies
+        id: audit
+        run: |
+          set -euo pipefail
+
+          set +e
+          npm audit --omit=dev --json > audit.json
+          audit_exit=$?
+          set -e
+
+          vulnerabilities="$(node -e "const r=require('./audit.json'); const v=r.metadata?.vulnerabilities || {}; const total=(v.low||0)+(v.moderate||0)+(v.high||0)+(v.critical||0); process.stdout.write(String(total));")"
+
+          echo "audit_exit=$audit_exit" >> "$GITHUB_OUTPUT"
+          echo "vulnerabilities=$vulnerabilities" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate PR head coverage
+        id: head_coverage
+        run: |
+          set -euo pipefail
+          npx vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+          head_lines_pct="$(node scripts/get-lcov-lines-pct.mjs coverage/lcov.info)"
+          echo "lines_pct=$head_lines_pct" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate base branch coverage
+        id: base_coverage
+        run: |
+          set -euo pipefail
+
+          base_dir="$(mktemp -d)"
+          git worktree add --detach "$base_dir" "origin/${{ steps.labels.outputs.base_ref }}"
+          trap 'git worktree remove --force "$base_dir"' EXIT
+
+          cd "$base_dir"
+          npm ci
+          npx vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+          base_lines_pct="$(node "$GITHUB_WORKSPACE/scripts/get-lcov-lines-pct.mjs" coverage/lcov.info)"
+          echo "lines_pct=$base_lines_pct" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce policy rules
+        env:
+          HAS_OVERRIDE: ${{ steps.labels.outputs.has_override }}
+          AUDIT_VULNERABILITIES: ${{ steps.audit.outputs.vulnerabilities }}
+          HEAD_LINES_PCT: ${{ steps.head_coverage.outputs.lines_pct }}
+          BASE_LINES_PCT: ${{ steps.base_coverage.outputs.lines_pct }}
+          OVERRIDE_LABEL: ${{ env.OVERRIDE_LABEL }}
+        run: |
+          set -euo pipefail
+
+          failed=0
+          coverage_decreased="$(node -e "const head=Number(process.env.HEAD_LINES_PCT); const base=Number(process.env.BASE_LINES_PCT); process.stdout.write(head < base ? 'true' : 'false');")"
+
+          echo "Head lines coverage: $HEAD_LINES_PCT"
+          echo "Base lines coverage: $BASE_LINES_PCT"
+          echo "Prod vulnerabilities: $AUDIT_VULNERABILITIES"
+
+          if [ "$coverage_decreased" = "true" ]; then
+            if [ "$HAS_OVERRIDE" = "true" ]; then
+              echo "Coverage decreased, but override label '$OVERRIDE_LABEL' is set."
+            else
+              echo "Coverage decreased compared to base branch. Add label '$OVERRIDE_LABEL' to override." >&2
+              failed=1
+            fi
+          fi
+
+          if [ "${AUDIT_VULNERABILITIES:-0}" -gt 0 ]; then
+            if [ "$HAS_OVERRIDE" = "true" ]; then
+              echo "npm audit found vulnerabilities, but override label '$OVERRIDE_LABEL' is set."
+            else
+              echo "npm audit --omit=dev found $AUDIT_VULNERABILITIES vulnerabilities. Add label '$OVERRIDE_LABEL' to override." >&2
+              failed=1
+            fi
+          fi
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Commit synced version after checks
+        if: github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository && steps.sync_version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          DESIRED_VERSION: ${{ steps.sync_version.outputs.desired_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json
+          git commit -m "chore(release): v${DESIRED_VERSION}"
+          git push origin "HEAD:${PR_HEAD_REF}"
+
+          synced_sha="$(git rev-parse HEAD)"
+
+          gh api -X POST "repos/${REPO}/statuses/${synced_sha}" \
+            -f state="success" \
+            -f context="policy-gates" \
+            -f description="PR Policy Gates passed on synchronized version commit." \
+            -f target_url="$RUN_URL"
