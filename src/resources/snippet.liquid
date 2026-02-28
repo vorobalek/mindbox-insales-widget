@@ -1,15 +1,36 @@
 {% assign mindbox_endpoint_id = widget_settings.endpoint_id | default: '' | strip %}
 {% assign mindbox_api_domain = widget_settings.api_domain | default: '' | strip | replace: 'https://', '' | replace: 'http://', '' | split: '/' | first %}
+{% assign mindbox_enable_webpush_value = widget_settings.enable_webpush_integration | default: false | append: '' | downcase | strip %}
+{% assign mindbox_enable_webpush = false %}
+{% if mindbox_enable_webpush_value == 'true' or mindbox_enable_webpush_value == '1' or mindbox_enable_webpush_value == 'yes' or mindbox_enable_webpush_value == 'on' %}
+  {% assign mindbox_enable_webpush = true %}
+{% endif %}
+{% assign mindbox_service_worker_path = widget_settings.service_worker_path | default: '' | strip %}
+{% assign mindbox_service_worker_scope = widget_settings.service_worker_scope | default: '' | strip %}
+{% capture mindbox_create_options %}
+  {% assign mindbox_has_create_option = false %}
+  {% if mindbox_endpoint_id != '' %}
+    endpointId: {{ mindbox_endpoint_id | json }}
+    {% assign mindbox_has_create_option = true %}
+  {% endif %}
+  {% if mindbox_service_worker_path != '' %}
+    {% if mindbox_has_create_option %},{% endif %}
+    serviceWorkerPath: {{ mindbox_service_worker_path | json }}
+    {% assign mindbox_has_create_option = true %}
+  {% endif %}
+  {% if mindbox_service_worker_scope != '' %}
+    {% if mindbox_has_create_option %},{% endif %}
+    serviceWorkerScope: {{ mindbox_service_worker_scope | json }}
+  {% endif %}
+{% endcapture %}
 
 <script>
   mindbox = window.mindbox || function() { mindbox.queue.push(arguments); };
   mindbox.queue = mindbox.queue || [];
-  mindbox('create', {
-    {% if mindbox_endpoint_id != '' %}
-    endpointId: {{ mindbox_endpoint_id | json }}
-    {% endif %}
-  });
+  mindbox('create', { {{ mindbox_create_options | strip }} });
+  {% if mindbox_enable_webpush %}
   mindbox("webpush.create");
+  {% endif %}
 </script>
 
 {% if mindbox_api_domain != '' %}
