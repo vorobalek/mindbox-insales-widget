@@ -71,7 +71,3 @@ https://developers.mindbox.ru/page/webpush
 
 Совместимость ориентирована на официальный регламент inSales:
 https://www.insales.ru/collection/doc-reglamenty/product/perechen-brauzerov-i-operatsionnyh-sistem-podderzhivaemyh-insales
-
-## Лицензия
-
-См. [LICENSE.md](LICENSE.md).
