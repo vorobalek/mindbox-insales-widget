@@ -1,6 +1,9 @@
 {
   "api_domain": "api.mindbox.ru",
   "external_system_name": "website",
+  "enable_webpush_integration": false,
+  "service_worker_path": "/mindbox-services-worker.js",
+  "service_worker_scope": "/",
   "operation_view_category": "Website.ViewCategory",
   "operation_view_product": "Website.ViewProduct",
   "operation_set_cart": "Website.SetCart",

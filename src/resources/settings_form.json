@@ -20,6 +20,24 @@
           "type": "text",
           "label": "Внешняя система",
           "hint": "Системное имя Внешней системы продуктов и заказов в Mindbox."
+        },
+        {
+          "name": "enable_webpush_integration",
+          "type": "checkbox",
+          "label": "Включить интеграцию Web-Push",
+          "hint": "Для работы WebPush интеграции необходимо разместить файл по инструкции https://developers.mindbox.ru/page/webpush"
+        },
+        {
+          "name": "service_worker_path",
+          "type": "text",
+          "label": "ServiceWorkerPath",
+          "hint": "Тестовый параметр для mindbox('create'). Если пусто, не передается."
+        },
+        {
+          "name": "service_worker_scope",
+          "type": "text",
+          "label": "ServiceWorkerScope",
+          "hint": "Тестовый параметр для mindbox('create'). Если пусто, не передается."
         }
       ]
     },
