@@ -23,15 +23,15 @@
       };
     })();
   </script>
-  {% capture content_for_layout %}
-    {% render 'entrypoint-page',
+  {%- capture content_for_layout -%}
+    {%- render 'entrypoint-page',
       widget_settings: widget_settings,
       template: template,
       collection: collection,
       product: product
-    %}
-  {% endcapture %}
-  {{ content_for_layout }}
+    -%}
+  {%- endcapture %}
+{{- content_for_layout | rstrip }}
   <script type="module" src="/src/snippet.ts"></script>
 </head>
 <body></body>

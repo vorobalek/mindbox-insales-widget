@@ -22,14 +22,6 @@ export interface MindboxWidgetConfig {
   operations?: MindboxOperations;
   page?: MindboxWidgetPage;
 }
-
-export interface MindboxCommandPayload {
-  operation: string;
-  data: unknown;
-  onSuccess: () => void;
-  onError: (error: unknown) => void;
-}
-
 export interface MindboxFunction {
   (command: string, payload: unknown): void;
 }
