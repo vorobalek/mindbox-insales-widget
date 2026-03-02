@@ -1,6 +1,6 @@
 {
   "name": "mindbox-insales-widget",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Mindbox widget for inSales",
   "packageManager": "npm@11.11.0",
@@ -45,7 +45,7 @@
     "browserslist-to-esbuild": "^2.1.1",
     "eslint": "^9.39.3",
     "eslint-plugin-eslint-comments": "^3.2.0",
-    "globals": "^17.3.0",
+    "globals": "^17.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "liquidjs": "^10.24.0",
