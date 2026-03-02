@@ -143,6 +143,110 @@ const createEntrypointHtml = async (pageData: LiquidPageData = {}): Promise<stri
   return liquidRuntime.renderFile(ENTRYPOINT_TEMPLATE_NAME, getLiquidScope(pageData));
 };
 
+const attachRenderedHtmlDebugBlock = async (page: Page, renderedHtml: string): Promise<void> => {
+  await page.evaluate((html) => {
+    const blockId = '__e2e-rendered-html-debug';
+    const preId = `${blockId}-pre`;
+    const codeId = `${blockId}-code`;
+
+    let debugBlock = document.getElementById(blockId) as HTMLDetailsElement | null;
+    if (!debugBlock) {
+      debugBlock = document.createElement('details');
+      debugBlock.id = blockId;
+      debugBlock.open = true;
+      debugBlock.style.margin = '16px';
+      debugBlock.style.padding = '8px 12px';
+      debugBlock.style.border = '1px solid #d1d5db';
+      debugBlock.style.borderRadius = '8px';
+      debugBlock.style.background = '#f8fafc';
+      debugBlock.style.color = '#111827';
+      debugBlock.style.boxSizing = 'border-box';
+      debugBlock.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
+      const summary = document.createElement('summary');
+      summary.textContent = 'Rendered page HTML (e2e debug)';
+      summary.style.cursor = 'pointer';
+      summary.style.fontWeight = '600';
+      summary.style.marginBottom = '8px';
+
+      const pre = document.createElement('pre');
+      pre.id = preId;
+      pre.style.margin = '8px 0 0';
+      pre.style.padding = '12px';
+      pre.style.overflow = 'auto';
+      pre.style.maxHeight = '50vh';
+      pre.style.background = '#ffffff';
+      pre.style.border = '1px solid #e5e7eb';
+      pre.style.borderRadius = '6px';
+      pre.style.boxSizing = 'border-box';
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.style.wordBreak = 'break-word';
+
+      const code = document.createElement('code');
+      code.id = codeId;
+      pre.append(code);
+      debugBlock.append(summary, pre);
+    }
+
+    const applyLayout = () => {
+      const preElement = debugBlock!.querySelector(`#${preId}`) as HTMLPreElement | null;
+      if (!preElement) {
+        return;
+      }
+
+      if (debugBlock!.open) {
+        debugBlock!.style.position = 'fixed';
+        debugBlock!.style.inset = '0';
+        debugBlock!.style.margin = '0';
+        debugBlock!.style.padding = '12px';
+        debugBlock!.style.borderRadius = '0';
+        debugBlock!.style.zIndex = '2147483647';
+        debugBlock!.style.display = 'flex';
+        debugBlock!.style.flexDirection = 'column';
+        debugBlock!.style.overflow = 'hidden';
+
+        preElement.style.margin = '12px 0 0';
+        preElement.style.flex = '1';
+        preElement.style.minHeight = '0';
+        preElement.style.height = 'calc(100vh - 72px)';
+        preElement.style.maxHeight = 'calc(100vh - 72px)';
+      } else {
+        debugBlock!.style.position = 'fixed';
+        debugBlock!.style.inset = '16px 16px auto 16px';
+        debugBlock!.style.margin = '0';
+        debugBlock!.style.padding = '8px 12px';
+        debugBlock!.style.borderRadius = '8px';
+        debugBlock!.style.zIndex = '2147483647';
+        debugBlock!.style.display = 'block';
+        debugBlock!.style.overflow = 'visible';
+
+        preElement.style.margin = '8px 0 0';
+        preElement.style.flex = '0 1 auto';
+        preElement.style.minHeight = 'auto';
+        preElement.style.height = 'auto';
+        preElement.style.maxHeight = '50vh';
+      }
+    };
+
+    if (debugBlock.dataset.layoutBound !== 'true') {
+      debugBlock.addEventListener('toggle', applyLayout);
+      debugBlock.dataset.layoutBound = 'true';
+    }
+
+    applyLayout();
+
+    const codeElement = debugBlock.querySelector(`#${codeId}`);
+    if (codeElement) {
+      codeElement.textContent = html;
+    }
+
+    const body = document.body || document.documentElement;
+    if (!debugBlock.isConnected) {
+      body.prepend(debugBlock);
+    }
+  }, renderedHtml);
+};
+
 export const openWidgetPage = async (page: Page, pageData: LiquidPageData = {}): Promise<void> => {
   const [entrypointHtml, trackerMockScript] = await Promise.all([
     createEntrypointHtml(pageData),
@@ -161,6 +265,7 @@ export const openWidgetPage = async (page: Page, pageData: LiquidPageData = {}):
   await page.setContent(entrypointHtml, {
     waitUntil: 'domcontentloaded'
   });
+  await attachRenderedHtmlDebugBlock(page, entrypointHtml);
 };
 
 export const getCalls = async (page: Page): Promise<MindboxCall[]> => {
