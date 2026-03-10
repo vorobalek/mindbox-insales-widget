@@ -1,5 +1,5 @@
 import js from '@eslint/js';
-import eslintComments from 'eslint-plugin-eslint-comments';
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import globals from 'globals';
