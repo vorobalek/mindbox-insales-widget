@@ -39,7 +39,7 @@
     "@eslint-community/eslint-plugin-eslint-comments": "^4.5.0",
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.4.0",
-    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.57.1",
     "@vitest/coverage-v8": "^4.0.18",
     "browserslist": "^4.28.0",
