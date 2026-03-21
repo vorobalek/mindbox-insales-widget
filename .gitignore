@@ -1,6 +1,7 @@
 .DS_Store
 .idea/
 dist/
+dist-min/
 node_modules/
 coverage/
 test-results/
