@@ -36,6 +36,11 @@ export interface LiquidPageData {
     setWishList?: string | null;
     clearWishList?: string | null;
   };
+  customer?: {
+    id?: string | number | null;
+    phone?: string | null;
+    authorized?: boolean;
+  };
 }
 
 interface LiquidRuntime {
@@ -124,6 +129,12 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
       operation_clear_cart: operations.clearCart,
       operation_set_wishlist: operations.setWishList,
       operation_clear_wishlist: operations.clearWishList
+    },
+    customer_data: {
+      id: pageData.customer && pageData.customer.id !== undefined ? pageData.customer.id : null,
+      phone: pageData.customer && pageData.customer.phone !== undefined ? pageData.customer.phone : null,
+      authorized:
+        pageData.customer && pageData.customer.authorized !== undefined ? pageData.customer.authorized : false
     },
     template,
     collection:

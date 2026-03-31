@@ -21,6 +21,32 @@
           handler(payload);
         });
       };
+      window.ajaxAPI = {
+        shop: {
+          client: {
+            get: function() {
+              const payload = {
+                id: {% if customer_data and customer_data.id != nil %}{{ customer_data.id | json }}{% else %}null{% endif %},
+                phone: {% if customer_data and customer_data.phone != nil %}{{ customer_data.phone | json }}{% else %}null{% endif %}
+              };
+              return {
+                done: function(callback) {
+                  if ({% if customer_data and customer_data.authorized %}true{% else %}false{% endif %}) {
+                    callback(payload);
+                  }
+                  return this;
+                },
+                fail: function(callback) {
+                  if (!{% if customer_data and customer_data.authorized %}true{% else %}false{% endif %}) {
+                    callback({ message: 'Not authorized' });
+                  }
+                  return this;
+                }
+              };
+            }
+          }
+        }
+      };
     })();
   </script>
   {%- capture content_for_layout -%}
