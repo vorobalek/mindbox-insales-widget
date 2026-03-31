@@ -93,3 +93,47 @@ test('sends setWishList and clearWishList operations', async ({ page }) => {
   expect(clearWishListCall.payload && clearWishListCall.payload.operation).toBe('Website.ClearWishList');
   expect(clearWishListCall.payload && clearWishListCall.payload.data).toEqual({});
 });
+
+test('sends Website.AuthorizeCustomer with phone as websiteID', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index',
+    customer: {
+      id: 501,
+      phone: '+7 (999) 111-22-33',
+      authorized: true
+    }
+  });
+
+  await expectAsyncCallsCount(page, 1);
+  const [authorizeCall] = await getAsyncCalls(page);
+  expect(authorizeCall.payload && authorizeCall.payload.operation).toBe('Website.AuthorizeCustomer');
+  expect(authorizeCall.payload && authorizeCall.payload.data).toEqual({
+    customer: {
+      ids: {
+        websiteID: '+79991112233'
+      }
+    }
+  });
+});
+
+test('falls back to client id in Website.AuthorizeCustomer', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index',
+    customer: {
+      id: 777,
+      phone: '',
+      authorized: true
+    }
+  });
+
+  await expectAsyncCallsCount(page, 1);
+  const [authorizeCall] = await getAsyncCalls(page);
+  expect(authorizeCall.payload && authorizeCall.payload.operation).toBe('Website.AuthorizeCustomer');
+  expect(authorizeCall.payload && authorizeCall.payload.data).toEqual({
+    customer: {
+      ids: {
+        websiteID: '777'
+      }
+    }
+  });
+});
