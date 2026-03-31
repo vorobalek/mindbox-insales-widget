@@ -1,4 +1,5 @@
 import { MESSAGE_EVENTBUS_UNAVAILABLE, MESSAGE_MISSING_SETTINGS, RETRY_ATTEMPTS, RETRY_DELAY_MS } from './constants';
+import { startAuthorizeCustomerFlow } from './authorizeCustomerSender';
 import type { ConsoleLike, EventBusLike, MindboxWidgetConfig, TimerLike, WidgetWindow } from './contracts';
 import { normalizeAndValidateConfig } from './config';
 import { createConfigErrorLogger } from './logger';
@@ -46,6 +47,15 @@ export const initializeWidget = (deps: InitializeWidgetDeps): Promise<void> => {
     stateRef,
     config: normalizedConfig,
     sendOperation
+  });
+
+  startAuthorizeCustomerFlow({
+    windowRef: deps.windowRef,
+    stateRef,
+    sendOperation,
+    storage: typeof sessionStorage === 'undefined' ? undefined : sessionStorage,
+    setIntervalFn: deps.setIntervalFn,
+    clearIntervalFn: deps.clearIntervalFn
   });
 
   if (stateRef.eventsBound) {
