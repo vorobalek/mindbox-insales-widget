@@ -52,6 +52,39 @@ test('sends setCart and clearCart operations for cart updates', async ({ page })
   expect(clearCartCall.payload && clearCartCall.payload.data).toEqual({});
 });
 
+test('does not send duplicate setCart when cart payload is unchanged', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index'
+  });
+  const cartPayload = {
+    order_lines: [
+      {
+        id: 'SKU-1',
+        quantity: 2,
+        sale_price: 99
+      }
+    ]
+  };
+
+  await emitEvent(page, CART_EVENT, cartPayload);
+  await expectAsyncCallsCount(page, 1);
+
+  await emitEvent(page, CART_EVENT, cartPayload);
+  await expectAsyncCallsCount(page, 1);
+});
+
+test('does not send duplicate clearCart when cart stays empty', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index'
+  });
+
+  await emitEvent(page, CART_EVENT, { order_lines: [] });
+  await expectAsyncCallsCount(page, 1);
+
+  await emitEvent(page, CART_EVENT, { order_lines: [] });
+  await expectAsyncCallsCount(page, 1);
+});
+
 test('sends setWishList and clearWishList operations', async ({ page }) => {
   await openWidgetPage(page, {
     template: 'index'
@@ -92,6 +125,26 @@ test('sends setWishList and clearWishList operations', async ({ page }) => {
   const clearWishListCall = asyncCalls[1];
   expect(clearWishListCall.payload && clearWishListCall.payload.operation).toBe('Website.ClearWishList');
   expect(clearWishListCall.payload && clearWishListCall.payload.data).toEqual({});
+});
+
+test('does not send duplicate setWishList when favorites payload is unchanged', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index'
+  });
+  const favoritesPayload = {
+    products: [
+      {
+        id: 789,
+        price_min: 299
+      }
+    ]
+  };
+
+  await emitEvent(page, FAVORITES_EVENT, favoritesPayload);
+  await expectAsyncCallsCount(page, 1);
+
+  await emitEvent(page, FAVORITES_EVENT, favoritesPayload);
+  await expectAsyncCallsCount(page, 1);
 });
 
 test('sends Website.AuthorizeCustomer with phone mapped to customer.mobilePhone', async ({ page }) => {

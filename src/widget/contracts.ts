@@ -69,6 +69,8 @@ export interface MindboxInSalesWidgetState {
   productViewSent?: boolean;
   authorizeCustomerSent?: boolean;
   lastAuthorizedWebsiteId?: string;
+  lastCartSyncFingerprint?: string;
+  lastWishlistSyncFingerprint?: string;
 }
 
 export interface MindboxInSalesWidgetGlobal {
