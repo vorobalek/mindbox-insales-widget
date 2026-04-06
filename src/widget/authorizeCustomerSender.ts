@@ -1,10 +1,10 @@
 import {
-  AUTHORIZE_CUSTOMER_OPERATION,
   AUTHORIZE_CUSTOMER_RETRY_ATTEMPTS,
   AUTHORIZE_CUSTOMER_RETRY_DELAY_MS,
   AUTHORIZE_CUSTOMER_SESSION_KEY
 } from './constants';
-import type { InSalesClient, MindboxInSalesWidgetState, TimerLike, WidgetWindow } from './contracts';
+import type { MindboxWidgetConfig, MindboxInSalesWidgetState, TimerLike, WidgetWindow } from './contracts';
+import { formatAuthorizeSourceValue, getValueByPath, setValueByPath } from './pathUtils';
 import type { SendOperation } from './operationSender';
 
 interface StorageLike {
@@ -16,6 +16,7 @@ export interface AuthorizeCustomerSenderDeps extends TimerLike {
   windowRef: WidgetWindow;
   stateRef: MindboxInSalesWidgetState;
   sendOperation: SendOperation;
+  getConfig: () => MindboxWidgetConfig | null;
   storage?: StorageLike;
 }
 
@@ -24,45 +25,7 @@ interface DeferredLike {
   fail?: (callback: (error: unknown) => void) => unknown;
 }
 
-const normalizePhone = (phone: string): string => {
-  return phone.replace(/[^\d+]/g, '');
-};
-
-const extractClient = (input: unknown): InSalesClient | null => {
-  if (!input || typeof input !== 'object') {
-    return null;
-  }
-
-  const root = input as Record<string, unknown>;
-  if ('id' in root || 'phone' in root) {
-    return root as InSalesClient;
-  }
-
-  if ('client' in root && root.client && typeof root.client === 'object') {
-    return root.client as InSalesClient;
-  }
-
-  return null;
-};
-
-export const resolveWebsiteId = (client: InSalesClient | null): string => {
-  if (!client) {
-    return '';
-  }
-
-  const normalizedPhone = typeof client.phone === 'string' ? normalizePhone(client.phone.trim()) : '';
-  if (normalizedPhone !== '') {
-    return normalizedPhone;
-  }
-
-  if (client.id !== undefined && client.id !== null) {
-    return String(client.id).trim();
-  }
-
-  return '';
-};
-
-const getStoredWebsiteId = (storage: StorageLike | undefined): string => {
+const getStoredDedupeValue = (storage: StorageLike | undefined): string => {
   if (!storage) {
     return '';
   }
@@ -74,22 +37,22 @@ const getStoredWebsiteId = (storage: StorageLike | undefined): string => {
   }
 };
 
-const saveStoredWebsiteId = (storage: StorageLike | undefined, websiteId: string): void => {
+const saveStoredDedupeValue = (storage: StorageLike | undefined, value: string): void => {
   if (!storage) {
     return;
   }
 
   try {
-    storage.setItem(AUTHORIZE_CUSTOMER_SESSION_KEY, websiteId);
+    storage.setItem(AUTHORIZE_CUSTOMER_SESSION_KEY, value);
   } catch {
     // ignore
   }
 };
 
-const markAsSent = (stateRef: MindboxInSalesWidgetState, storage: StorageLike | undefined, websiteId: string): void => {
+const markAsSent = (stateRef: MindboxInSalesWidgetState, storage: StorageLike | undefined, dedupeKey: string): void => {
   stateRef.authorizeCustomerSent = true;
-  stateRef.lastAuthorizedWebsiteId = websiteId;
-  saveStoredWebsiteId(storage, websiteId);
+  stateRef.lastAuthorizedWebsiteId = dedupeKey;
+  saveStoredDedupeValue(storage, dedupeKey);
 };
 
 const isDeferredLike = (input: unknown): input is DeferredLike => {
@@ -109,7 +72,7 @@ const isPromiseLike = (input: unknown): input is Promise<unknown> => {
   return typeof (input as Promise<unknown>).then === 'function';
 };
 
-const getClientFromAjaxApi = async (windowRef: WidgetWindow): Promise<InSalesClient | null> => {
+const getRawClientPayload = async (windowRef: WidgetWindow): Promise<unknown | null> => {
   const getClient = windowRef.ajaxAPI?.shop?.client?.get;
   if (typeof getClient !== 'function') {
     return null;
@@ -117,8 +80,7 @@ const getClientFromAjaxApi = async (windowRef: WidgetWindow): Promise<InSalesCli
 
   const result = getClient();
   if (isPromiseLike(result)) {
-    const resolved = await result;
-    return extractClient(resolved);
+    return result;
   }
 
   if (!isDeferredLike(result)) {
@@ -126,19 +88,19 @@ const getClientFromAjaxApi = async (windowRef: WidgetWindow): Promise<InSalesCli
   }
 
   return new Promise((resolve) => {
-    let resolved = false;
-    const safeResolve = (value: InSalesClient | null) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(value);
+    let settled = false;
+    const finish = (payload: unknown | null) => {
+      if (!settled) {
+        settled = true;
+        resolve(payload);
       }
     };
 
     result.done?.((payload) => {
-      safeResolve(extractClient(payload));
+      finish(payload);
     });
     result.fail?.(() => {
-      safeResolve(null);
+      finish(null);
     });
   });
 };
@@ -147,45 +109,72 @@ const sendAuthorizeCustomer = (
   stateRef: MindboxInSalesWidgetState,
   sendOperation: SendOperation,
   storage: StorageLike | undefined,
-  websiteId: string
+  operationName: string,
+  data: Record<string, unknown>,
+  dedupeKey: string
 ): boolean => {
-  if (!websiteId) {
+  if (!dedupeKey) {
     return false;
   }
 
-  if (stateRef.authorizeCustomerSent && stateRef.lastAuthorizedWebsiteId === websiteId) {
+  if (stateRef.authorizeCustomerSent && stateRef.lastAuthorizedWebsiteId === dedupeKey) {
     return true;
   }
 
-  if (getStoredWebsiteId(storage) === websiteId) {
-    markAsSent(stateRef, storage, websiteId);
+  if (getStoredDedupeValue(storage) === dedupeKey) {
+    markAsSent(stateRef, storage, dedupeKey);
     return true;
   }
 
-  sendOperation(AUTHORIZE_CUSTOMER_OPERATION, {
-    customer: {
-      ids: {
-        websiteID: websiteId
-      }
-    }
-  });
+  sendOperation(operationName, data);
 
-  markAsSent(stateRef, storage, websiteId);
+  markAsSent(stateRef, storage, dedupeKey);
   return true;
+};
+
+const isAuthorizeConfigReady = (config: MindboxWidgetConfig | null): boolean => {
+  if (!config || !config.authorizeCustomer?.enabled) {
+    return false;
+  }
+
+  const operationName = config.operations && config.operations.authorizeCustomer;
+  const sourcePath = config.authorizeCustomer.sourcePath || '';
+  const targetPath = config.authorizeCustomer.targetPath || '';
+
+  return Boolean(operationName && sourcePath && targetPath);
 };
 
 export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): void => {
   const storage = deps.storage;
-  const hasClientGetter = typeof deps.windowRef.ajaxAPI?.shop?.client?.get === 'function';
+  const config = deps.getConfig();
 
+  if (!isAuthorizeConfigReady(config)) {
+    return;
+  }
+
+  const hasClientGetter = typeof deps.windowRef.ajaxAPI?.shop?.client?.get === 'function';
   if (!hasClientGetter) {
     return;
   }
 
+  const operationName = config!.operations!.authorizeCustomer!;
+  const sourcePath = config!.authorizeCustomer!.sourcePath!;
+  const targetPath = config!.authorizeCustomer!.targetPath!;
+
   const trySend = async (): Promise<boolean> => {
-    const client = await getClientFromAjaxApi(deps.windowRef);
-    const websiteId = resolveWebsiteId(client);
-    return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, websiteId);
+    const raw = await getRawClientPayload(deps.windowRef);
+    if (raw === null || raw === undefined) {
+      return false;
+    }
+
+    const extracted = getValueByPath(raw, sourcePath);
+    const stringValue = formatAuthorizeSourceValue(extracted, sourcePath);
+    if (!stringValue) {
+      return false;
+    }
+
+    const data = setValueByPath({}, targetPath, stringValue);
+    return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, operationName, data, stringValue);
   };
 
   void trySend().then((isSent) => {

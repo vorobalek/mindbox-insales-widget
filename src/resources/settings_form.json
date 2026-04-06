@@ -79,6 +79,35 @@
           "type": "text",
           "label": "Очистка Избранного",
           "hint": "Системное имя Операции очистки избранного в Mindbox. Если пусто, событие не отправляется."
+        },
+        {
+          "name": "operation_authorize_customer",
+          "type": "text",
+          "label": "Пользователь авторизован",
+          "hint": "Системное имя операции в Mindbox при авторизации клиента. Если пусто, событие не отправляется."
+        }
+      ]
+    },
+    {
+      "group_name": "Авторизация клиента",
+      "items": [
+        {
+          "name": "enable_authorize_customer",
+          "type": "checkbox",
+          "label": "Отправлять операцию авторизации",
+          "hint": "По умолчанию выключено. Требуются путь к полю в ответе client.get() и путь в теле операции."
+        },
+        {
+          "name": "authorize_customer_source_path",
+          "type": "text",
+          "label": "Путь к значению в JSON клиента",
+          "hint": "Точечный путь от корня ответа ajaxAPI.shop.client.get(), например phone или id."
+        },
+        {
+          "name": "authorize_customer_target_path",
+          "type": "text",
+          "label": "Путь в теле операции (data)",
+          "hint": "Точечный путь в объекте data, например customer.mobilePhone или customer.ids.websiteID."
         }
       ]
     }

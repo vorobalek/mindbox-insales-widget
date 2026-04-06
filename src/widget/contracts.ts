@@ -5,6 +5,7 @@ export interface MindboxOperations {
   clearWishList?: string;
   setCart?: string;
   clearCart?: string;
+  authorizeCustomer?: string;
 }
 
 export interface MindboxWidgetPage {
@@ -14,12 +15,19 @@ export interface MindboxWidgetPage {
   productPrice?: string | number | null;
 }
 
+export interface MindboxWidgetAuthorizeCustomer {
+  enabled?: boolean | string | number;
+  sourcePath?: string;
+  targetPath?: string;
+}
+
 export interface MindboxWidgetConfig {
   apiDomain?: string;
   isValid?: boolean;
   missingSettings?: string[];
   idKey?: string;
   operations?: MindboxOperations;
+  authorizeCustomer?: MindboxWidgetAuthorizeCustomer;
   page?: MindboxWidgetPage;
 }
 export interface MindboxFunction {

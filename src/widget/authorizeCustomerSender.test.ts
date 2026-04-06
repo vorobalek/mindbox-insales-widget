@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AUTHORIZE_CUSTOMER_OPERATION, AUTHORIZE_CUSTOMER_SESSION_KEY } from './constants';
-import { resolveWebsiteId, startAuthorizeCustomerFlow } from './authorizeCustomerSender';
-import type { JQueryDeferredLike, WidgetWindow } from './contracts';
+import { AUTHORIZE_CUSTOMER_SESSION_KEY } from './constants';
+import { startAuthorizeCustomerFlow } from './authorizeCustomerSender';
+import type { MindboxWidgetConfig, JQueryDeferredLike, WidgetWindow } from './contracts';
 
 const createDeferred = (payload: unknown, shouldFail = false): JQueryDeferredLike<unknown> => {
   return {
@@ -20,21 +20,28 @@ const createDeferred = (payload: unknown, shouldFail = false): JQueryDeferredLik
   };
 };
 
-describe('resolveWebsiteId', () => {
-  it('uses phone first and then falls back to id', () => {
-    expect(resolveWebsiteId({ phone: ' +7 (999) 111-22-33 ', id: 101 })).toBe('+79991112233');
-    expect(resolveWebsiteId({ phone: ' ', id: 101 })).toBe('101');
-    expect(resolveWebsiteId({ id: 202 })).toBe('202');
-    expect(resolveWebsiteId(null)).toBe('');
-  });
+const baseAuthorizeConfig = (): MindboxWidgetConfig => ({
+  apiDomain: 'api.mindbox.ru',
+  idKey: 'website',
+  operations: {
+    authorizeCustomer: 'Website.AuthorizeCustomer'
+  },
+  authorizeCustomer: {
+    enabled: true,
+    sourcePath: 'phone',
+    targetPath: 'customer.ids.websiteID'
+  }
 });
 
+const settleAsyncFlow = (): Promise<void> =>
+  new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+
 describe('startAuthorizeCustomerFlow', () => {
-  it('sends authorize operation with normalized phone', async () => {
+  it('sends operation with mapped payload and normalized phone', async () => {
     const sendOperation = vi.fn();
-    const setIntervalFn = vi.fn(() => {
-      return setInterval(() => undefined, 60_000);
-    });
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
     const clearIntervalFn = vi.fn();
     const storageMap = new Map<string, string>();
     const storage = {
@@ -55,18 +62,21 @@ describe('startAuthorizeCustomerFlow', () => {
     } as WidgetWindow;
 
     const stateRef = {};
+    const getConfig = vi.fn(() => baseAuthorizeConfig());
+
     startAuthorizeCustomerFlow({
       windowRef,
       stateRef,
       sendOperation,
+      getConfig,
       storage,
       setIntervalFn,
       clearIntervalFn
     });
 
-    await Promise.resolve();
+    await settleAsyncFlow();
 
-    expect(sendOperation).toHaveBeenCalledWith(AUTHORIZE_CUSTOMER_OPERATION, {
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
       customer: {
         ids: {
           websiteID: '+79000000001'
@@ -81,9 +91,9 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(setIntervalFn).not.toHaveBeenCalled();
   });
 
-  it('falls back to id and does not send duplicate in session', async () => {
+  it('does not send duplicate when session storage matches dedupe key', async () => {
     const sendOperation = vi.fn();
-    const storageMap = new Map<string, string>([[AUTHORIZE_CUSTOMER_SESSION_KEY, '88']]);
+    const storageMap = new Map<string, string>([[AUTHORIZE_CUSTOMER_SESSION_KEY, '+79000000001']]);
     const storage = {
       getItem: (key: string) => storageMap.get(key) || null,
       setItem: (key: string, value: string) => {
@@ -94,37 +104,47 @@ describe('startAuthorizeCustomerFlow', () => {
       ajaxAPI: {
         shop: {
           client: {
-            get: () => createDeferred({ id: 88, phone: '' })
+            get: () => createDeferred({ id: 15, phone: '+79000000001' })
           }
         }
       }
     } as WidgetWindow;
     const stateRef = {};
+    const getConfig = vi.fn(() => baseAuthorizeConfig());
 
     startAuthorizeCustomerFlow({
       windowRef,
       stateRef,
       sendOperation,
+      getConfig,
       storage,
       setIntervalFn: vi.fn(() => setInterval(() => undefined, 60_000)),
       clearIntervalFn: vi.fn()
     });
-    await Promise.resolve();
+    await settleAsyncFlow();
 
     expect(sendOperation).not.toHaveBeenCalled();
     expect(stateRef).toEqual({
       authorizeCustomerSent: true,
-      lastAuthorizedWebsiteId: '88'
+      lastAuthorizedWebsiteId: '+79000000001'
     });
   });
 
-  it('does nothing when ajaxAPI is unavailable', () => {
+  it('returns early when authorize customer is disabled', () => {
     const sendOperation = vi.fn();
     const setIntervalFn = vi.fn();
+    const getConfig = vi.fn(() => ({
+      ...baseAuthorizeConfig(),
+      authorizeCustomer: { enabled: false, sourcePath: 'phone', targetPath: 'customer.mobilePhone' }
+    }));
+
     startAuthorizeCustomerFlow({
-      windowRef: {},
+      windowRef: {
+        ajaxAPI: { shop: { client: { get: () => createDeferred({ phone: '1' }) } } }
+      } as WidgetWindow,
       stateRef: {},
       sendOperation,
+      getConfig,
       storage: undefined,
       setIntervalFn,
       clearIntervalFn: vi.fn()
@@ -134,7 +154,47 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(setIntervalFn).not.toHaveBeenCalled();
   });
 
-  it('retries and eventually sends once customer appears', async () => {
+  it('returns early when operation name or paths are missing', () => {
+    const sendOperation = vi.fn();
+    const getConfig = vi.fn(() => ({
+      ...baseAuthorizeConfig(),
+      operations: { authorizeCustomer: '' },
+      authorizeCustomer: { enabled: true, sourcePath: 'phone', targetPath: 'customer.mobilePhone' }
+    }));
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: { shop: { client: { get: () => createDeferred({ phone: '1' }) } } }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig,
+      storage: undefined,
+      setIntervalFn: vi.fn(),
+      clearIntervalFn: vi.fn()
+    });
+
+    expect(sendOperation).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when ajaxAPI is unavailable', () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn();
+    startAuthorizeCustomerFlow({
+      windowRef: {},
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).not.toHaveBeenCalled();
+  });
+
+  it('retries and sends once customer appears', async () => {
     let callIndex = 0;
     const get = vi.fn(() => {
       callIndex += 1;
@@ -152,6 +212,15 @@ describe('startAuthorizeCustomerFlow', () => {
     });
     const clearIntervalFn = vi.fn();
 
+    const getConfig = vi.fn(() => ({
+      ...baseAuthorizeConfig(),
+      authorizeCustomer: {
+        enabled: true,
+        sourcePath: 'id',
+        targetPath: 'customer.ids.websiteID'
+      }
+    }));
+
     startAuthorizeCustomerFlow({
       windowRef: {
         ajaxAPI: {
@@ -164,19 +233,20 @@ describe('startAuthorizeCustomerFlow', () => {
       },
       stateRef: {},
       sendOperation,
+      getConfig,
       storage: undefined,
       setIntervalFn,
       clearIntervalFn
     });
-    await Promise.resolve();
+    await settleAsyncFlow();
 
     expect(sendOperation).not.toHaveBeenCalled();
     expect(tick).not.toBeNull();
     tick!();
-    await Promise.resolve();
+    await settleAsyncFlow();
 
     expect(sendOperation).toHaveBeenCalledTimes(1);
-    expect(sendOperation).toHaveBeenCalledWith(AUTHORIZE_CUSTOMER_OPERATION, {
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
       customer: {
         ids: {
           websiteID: '31'

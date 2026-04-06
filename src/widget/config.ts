@@ -1,6 +1,17 @@
 import type { MindboxWidgetConfig } from './contracts';
 import { normalizeValue } from './normalizeValue';
 
+const parseCheckbox = (value: unknown): boolean => {
+  if (value === true) {
+    return true;
+  }
+  if (value === false || value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
+};
+
 export const normalizeAndValidateConfig = (input: MindboxWidgetConfig | undefined): MindboxWidgetConfig | null => {
   if (!input) {
     return null;
@@ -12,7 +23,14 @@ export const normalizeAndValidateConfig = (input: MindboxWidgetConfig | undefine
     setCart: normalizeValue(input.operations && input.operations.setCart),
     clearCart: normalizeValue(input.operations && input.operations.clearCart),
     setWishList: normalizeValue(input.operations && input.operations.setWishList),
-    clearWishList: normalizeValue(input.operations && input.operations.clearWishList)
+    clearWishList: normalizeValue(input.operations && input.operations.clearWishList),
+    authorizeCustomer: normalizeValue(input.operations && input.operations.authorizeCustomer)
+  };
+
+  const authorizeCustomer = {
+    enabled: parseCheckbox(input.authorizeCustomer && input.authorizeCustomer.enabled),
+    sourcePath: normalizeValue(input.authorizeCustomer && input.authorizeCustomer.sourcePath),
+    targetPath: normalizeValue(input.authorizeCustomer && input.authorizeCustomer.targetPath)
   };
 
   const config: MindboxWidgetConfig = {
@@ -21,7 +39,8 @@ export const normalizeAndValidateConfig = (input: MindboxWidgetConfig | undefine
       .replace(/^https?:\/\//, '')
       .replace(/\/+$/, ''),
     idKey: normalizeValue(input.idKey),
-    operations
+    operations,
+    authorizeCustomer
   };
 
   const requiredKeys: Array<{ name: string; value: string }> = [

@@ -53,6 +53,7 @@ export const initializeWidget = (deps: InitializeWidgetDeps): Promise<void> => {
     windowRef: deps.windowRef,
     stateRef,
     sendOperation,
+    getConfig,
     storage: typeof sessionStorage === 'undefined' ? undefined : sessionStorage,
     setIntervalFn: deps.setIntervalFn,
     clearIntervalFn: deps.clearIntervalFn

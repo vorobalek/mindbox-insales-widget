@@ -5,6 +5,13 @@
 {%- if mindbox_enable_webpush_value == 'true' or mindbox_enable_webpush_value == '1' or mindbox_enable_webpush_value == 'yes' or mindbox_enable_webpush_value == 'on' -%}
   {%- assign mindbox_enable_webpush = true -%}
 {%- endif -%}
+{%- assign mindbox_enable_authorize_value = widget_settings.enable_authorize_customer | default: false | append: '' | downcase | strip -%}
+{%- assign mindbox_enable_authorize_customer = false -%}
+{%- if mindbox_enable_authorize_value == 'true' or mindbox_enable_authorize_value == '1' or mindbox_enable_authorize_value == 'yes' or mindbox_enable_authorize_value == 'on' -%}
+  {%- assign mindbox_enable_authorize_customer = true -%}
+{%- endif -%}
+{%- assign mindbox_authorize_source_path = widget_settings.authorize_customer_source_path | default: '' | strip -%}
+{%- assign mindbox_authorize_target_path = widget_settings.authorize_customer_target_path | default: '' | strip -%}
 {%- assign mindbox_service_worker_path = widget_settings.service_worker_path | default: '' | strip -%}
 {%- assign mindbox_service_worker_scope = widget_settings.service_worker_scope | default: '' | strip -%}
 {%- capture mindbox_create_options -%}
@@ -37,7 +44,13 @@
           setCart: {{ widget_settings.operation_set_cart | json }},
           clearCart: {{ widget_settings.operation_clear_cart | json }},
           setWishList: {{ widget_settings.operation_set_wishlist | json }},
-          clearWishList: {{ widget_settings.operation_clear_wishlist | json }}
+          clearWishList: {{ widget_settings.operation_clear_wishlist | json }},
+          authorizeCustomer: {{ widget_settings.operation_authorize_customer | json }}
+        },
+        authorizeCustomer: {
+          enabled: {% if mindbox_enable_authorize_customer %}true{% else %}false{% endif %},
+          sourcePath: {{ mindbox_authorize_source_path | json }},
+          targetPath: {{ mindbox_authorize_target_path | json }}
         },
         page: {
           template: {{ template | json }},
