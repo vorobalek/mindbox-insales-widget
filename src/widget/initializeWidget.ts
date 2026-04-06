@@ -68,7 +68,8 @@ export const initializeWidget = (deps: InitializeWidgetDeps): Promise<void> => {
       stateRef,
       eventBus: deps.eventBus,
       getConfig,
-      sendOperation
+      sendOperation,
+      sessionStorageRef: typeof sessionStorage === 'undefined' ? undefined : sessionStorage
     });
   };
 

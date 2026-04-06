@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CART_EVENT, FAVORITES_EVENT } from './constants';
-import type { MindboxWidgetConfig } from './contracts';
+import type { MindboxInSalesWidgetState, MindboxWidgetConfig } from './contracts';
 import { bindSubscriptions } from './subscriptionBinder';
 
 describe('bindSubscriptions', () => {
@@ -29,7 +29,7 @@ describe('bindSubscriptions', () => {
   it('binds favorites and cart subscriptions and sends proper operations', () => {
     const handlers = new Map<string, (data: unknown) => void>();
     const sendOperation = vi.fn();
-    const stateRef = {};
+    const stateRef: MindboxInSalesWidgetState = {};
     let config: MindboxWidgetConfig = {
       idKey: 'externalId',
       operations: {
@@ -52,7 +52,7 @@ describe('bindSubscriptions', () => {
     });
 
     expect(result).toBe(true);
-    expect(stateRef).toEqual({ eventsBound: true });
+    expect(stateRef.eventsBound).toBe(true);
     expect(handlers.has(FAVORITES_EVENT)).toBe(true);
     expect(handlers.has(CART_EVENT)).toBe(true);
 
@@ -202,5 +202,136 @@ describe('bindSubscriptions', () => {
     handlers.get(FAVORITES_EVENT)!({ products: [{ id: 1, price_min: 10 }] });
 
     expect(sendOperation).not.toHaveBeenCalled();
+  });
+
+  it('does not send duplicate cart operations when payload fingerprint unchanged', () => {
+    const handlers = new Map<string, (data: unknown) => void>();
+    const sendOperation = vi.fn();
+    const stateRef = {};
+    const cartPayload = {
+      order_lines: [{ id: 1, quantity: 1, sale_price: 10 }]
+    };
+
+    bindSubscriptions({
+      stateRef,
+      eventBus: {
+        subscribe: (eventName, handler) => {
+          handlers.set(eventName, handler);
+        }
+      },
+      getConfig: () => ({
+        idKey: 'website',
+        operations: {
+          setCart: 'Website.SetCart',
+          clearCart: 'Website.ClearCart'
+        }
+      }),
+      sendOperation
+    });
+
+    handlers.get(CART_EVENT)!(cartPayload);
+    handlers.get(CART_EVENT)!(cartPayload);
+    handlers.get(CART_EVENT)!(cartPayload);
+
+    expect(sendOperation).toHaveBeenCalledTimes(1);
+    expect(sendOperation).toHaveBeenCalledWith('Website.SetCart', {
+      productList: [
+        {
+          count: 1,
+          pricePerItem: 10,
+          product: { ids: { website: '1' } }
+        }
+      ]
+    });
+  });
+
+  it('does not send duplicate wishlist operations when payload fingerprint unchanged', () => {
+    const handlers = new Map<string, (data: unknown) => void>();
+    const sendOperation = vi.fn();
+    const stateRef = {};
+    const favPayload = { products: [{ id: 5, price_min: 100 }] };
+
+    bindSubscriptions({
+      stateRef,
+      eventBus: {
+        subscribe: (eventName, handler) => {
+          handlers.set(eventName, handler);
+        }
+      },
+      getConfig: () => ({
+        idKey: 'website',
+        operations: {
+          setWishList: 'Website.SetWishList',
+          clearWishList: 'Website.ClearWishList'
+        }
+      }),
+      sendOperation
+    });
+
+    handlers.get(FAVORITES_EVENT)!(favPayload);
+    handlers.get(FAVORITES_EVENT)!(favPayload);
+
+    expect(sendOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it('dedupes using sessionStorage when widget state is fresh but tab storage retains fingerprint', () => {
+    const store = new Map<string, string>();
+    const sessionStorageRef = {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      }
+    } as Storage;
+
+    const handlers1 = new Map<string, (data: unknown) => void>();
+    const sendOperation1 = vi.fn();
+    const stateRef1 = {};
+
+    bindSubscriptions({
+      stateRef: stateRef1,
+      sessionStorageRef,
+      eventBus: {
+        subscribe: (eventName, handler) => {
+          handlers1.set(eventName, handler);
+        }
+      },
+      getConfig: () => ({
+        idKey: 'website',
+        operations: {
+          setCart: 'Website.SetCart',
+          clearCart: 'Website.ClearCart'
+        }
+      }),
+      sendOperation: sendOperation1
+    });
+
+    const cartPayload = { order_lines: [{ id: 9, quantity: 1, sale_price: 5 }] };
+    handlers1.get(CART_EVENT)!(cartPayload);
+    expect(sendOperation1).toHaveBeenCalledTimes(1);
+
+    const handlers2 = new Map<string, (data: unknown) => void>();
+    const sendOperation2 = vi.fn();
+    const stateRef2 = {};
+
+    bindSubscriptions({
+      stateRef: stateRef2,
+      sessionStorageRef,
+      eventBus: {
+        subscribe: (eventName, handler) => {
+          handlers2.set(eventName, handler);
+        }
+      },
+      getConfig: () => ({
+        idKey: 'website',
+        operations: {
+          setCart: 'Website.SetCart',
+          clearCart: 'Website.ClearCart'
+        }
+      }),
+      sendOperation: sendOperation2
+    });
+
+    handlers2.get(CART_EVENT)!(cartPayload);
+    expect(sendOperation2).toHaveBeenCalledTimes(0);
   });
 });

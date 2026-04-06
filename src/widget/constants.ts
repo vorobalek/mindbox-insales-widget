@@ -7,6 +7,8 @@ export const MESSAGE_EVENTBUS_UNAVAILABLE = '[mindbox] EventBus недоступ
 export const MESSAGE_MISSING_SETTINGS = '[mindbox] Не заполнены обязательные настройки виджета:';
 export const AUTHORIZE_CUSTOMER_OPERATION = 'Website.AuthorizeCustomer';
 export const AUTHORIZE_CUSTOMER_SESSION_KEY = 'mindbox_insales_authorize_customer_website_id';
+export const SYNC_CART_FINGERPRINT_SESSION_KEY = 'mindbox_insales_last_cart_fingerprint';
+export const SYNC_WISHLIST_FINGERPRINT_SESSION_KEY = 'mindbox_insales_last_wishlist_fingerprint';
 export const AUTHORIZE_CUSTOMER_RETRY_ATTEMPTS = 15;
 export const AUTHORIZE_CUSTOMER_RETRY_DELAY_MS = 400;
 
