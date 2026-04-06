@@ -35,6 +35,18 @@ export interface LiquidPageData {
     clearCart?: string | null;
     setWishList?: string | null;
     clearWishList?: string | null;
+    authorizeCustomer?: string | null;
+  };
+  authorizeCustomer?: {
+    enabled?: boolean;
+    sourcePath?: string;
+    targetPath?: string;
+    operationName?: string | null;
+  };
+  customer?: {
+    id?: string | number | null;
+    phone?: string | null;
+    authorized?: boolean;
   };
 }
 
@@ -107,8 +119,23 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
     clearWishList:
       pageData.operations && pageData.operations.clearWishList !== undefined
         ? pageData.operations.clearWishList
-        : 'Website.ClearWishList'
+        : 'Website.ClearWishList',
+    authorizeCustomer:
+      pageData.operations && pageData.operations.authorizeCustomer !== undefined
+        ? pageData.operations.authorizeCustomer
+        : 'Website.AuthorizeCustomer'
   };
+
+  const authorizeEnabled = pageData.authorizeCustomer && pageData.authorizeCustomer.enabled === true;
+  const authorizeSourcePath =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.sourcePath !== undefined
+      ? pageData.authorizeCustomer.sourcePath
+      : '';
+  const authorizeTargetPath =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.targetPath !== undefined
+      ? pageData.authorizeCustomer.targetPath
+      : '';
+  const operationAuthorizeCustomer = pageData.authorizeCustomer?.operationName ?? operations.authorizeCustomer;
 
   return {
     widget_settings: {
@@ -123,7 +150,16 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
       operation_set_cart: operations.setCart,
       operation_clear_cart: operations.clearCart,
       operation_set_wishlist: operations.setWishList,
-      operation_clear_wishlist: operations.clearWishList
+      operation_clear_wishlist: operations.clearWishList,
+      operation_authorize_customer: operationAuthorizeCustomer,
+      enable_authorize_customer: authorizeEnabled,
+      authorize_customer_source_path: authorizeSourcePath,
+      authorize_customer_target_path: authorizeTargetPath
+    },
+    customer_data: {
+      id: pageData.customer && pageData.customer.id !== undefined ? pageData.customer.id : null,
+      phone: pageData.customer && pageData.customer.phone !== undefined ? pageData.customer.phone : null,
+      authorized: pageData.customer && pageData.customer.authorized !== undefined ? pageData.customer.authorized : false
     },
     template,
     collection:

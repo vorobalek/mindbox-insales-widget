@@ -85,3 +85,4 @@ npm run test:e2e:headed
 
 1. `npx playwright install --with-deps chromium`
 2. `npm run test:e2e`
+

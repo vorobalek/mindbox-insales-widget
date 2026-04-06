@@ -5,6 +5,7 @@ export interface MindboxOperations {
   clearWishList?: string;
   setCart?: string;
   clearCart?: string;
+  authorizeCustomer?: string;
 }
 
 export interface MindboxWidgetPage {
@@ -14,12 +15,19 @@ export interface MindboxWidgetPage {
   productPrice?: string | number | null;
 }
 
+export interface MindboxWidgetAuthorizeCustomer {
+  enabled?: boolean | string | number;
+  sourcePath?: string;
+  targetPath?: string;
+}
+
 export interface MindboxWidgetConfig {
   apiDomain?: string;
   isValid?: boolean;
   missingSettings?: string[];
   idKey?: string;
   operations?: MindboxOperations;
+  authorizeCustomer?: MindboxWidgetAuthorizeCustomer;
   page?: MindboxWidgetPage;
 }
 export interface MindboxFunction {
@@ -59,6 +67,8 @@ export interface MindboxInSalesWidgetState {
   missingSettingsLogged?: boolean;
   collectionViewSent?: boolean;
   productViewSent?: boolean;
+  authorizeCustomerSent?: boolean;
+  lastAuthorizedWebsiteId?: string;
 }
 
 export interface MindboxInSalesWidgetGlobal {
@@ -71,6 +81,7 @@ export interface MindboxInSalesWidgetGlobal {
 export interface WidgetWindow {
   __mindboxInSalesWidget?: MindboxInSalesWidgetGlobal;
   mindbox?: MindboxFunction;
+  ajaxAPI?: InSalesAjaxApi;
 }
 
 export interface TimerLike {
@@ -79,6 +90,24 @@ export interface TimerLike {
 }
 
 export type ConfigErrorLogger = (message: string, details?: string) => void;
+
+export interface InSalesClient {
+  id?: string | number | null;
+  phone?: string | null;
+}
+
+export interface JQueryDeferredLike<T> {
+  done: (callback: (result: T) => void) => JQueryDeferredLike<T>;
+  fail: (callback: (error: unknown) => void) => JQueryDeferredLike<T>;
+}
+
+export interface InSalesAjaxApi {
+  shop?: {
+    client?: {
+      get?: () => JQueryDeferredLike<unknown> | Promise<unknown>;
+    };
+  };
+}
 
 declare global {
   interface Window extends WidgetWindow {}

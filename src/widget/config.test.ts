@@ -26,7 +26,13 @@ describe('config', () => {
       setCart: 'SetCart',
       clearCart: 'ClearCart',
       setWishList: '',
-      clearWishList: ''
+      clearWishList: '',
+      authorizeCustomer: ''
+    });
+    expect(config.authorizeCustomer).toEqual({
+      enabled: false,
+      sourcePath: '',
+      targetPath: ''
     });
     expect(config.isValid).toBe(true);
     expect(config.missingSettings).toEqual([]);
@@ -46,6 +52,34 @@ describe('config', () => {
 
     expect(config.isValid).toBe(true);
     expect(config.missingSettings).toEqual([]);
+  });
+
+  it('parses authorize customer checkbox and paths', () => {
+    const config = normalizeAndValidateConfig({
+      apiDomain: 'api.mindbox.ru',
+      idKey: 'website',
+      operations: {
+        viewCategory: '',
+        viewProduct: '',
+        setCart: '',
+        clearCart: '',
+        setWishList: '',
+        clearWishList: '',
+        authorizeCustomer: 'Website.AuthorizeCustomer'
+      },
+      authorizeCustomer: {
+        enabled: 'true',
+        sourcePath: ' phone ',
+        targetPath: ' customer.mobilePhone '
+      }
+    })!;
+
+    expect(config.authorizeCustomer).toEqual({
+      enabled: true,
+      sourcePath: 'phone',
+      targetPath: 'customer.mobilePhone'
+    });
+    expect(config.operations!.authorizeCustomer).toBe('Website.AuthorizeCustomer');
   });
 
   it('treats all operations as optional, including wishlist operations', () => {
