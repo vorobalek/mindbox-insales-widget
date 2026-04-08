@@ -41,6 +41,10 @@ export interface LiquidPageData {
     enabled?: boolean;
     sourcePath?: string;
     targetPath?: string;
+    sourcePath2?: string;
+    targetPath2?: string;
+    sourcePath3?: string;
+    targetPath3?: string;
     operationName?: string | null;
   };
   customer?: {
@@ -135,6 +139,22 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
     pageData.authorizeCustomer && pageData.authorizeCustomer.targetPath !== undefined
       ? pageData.authorizeCustomer.targetPath
       : '';
+  const authorizeSourcePath2 =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.sourcePath2 !== undefined
+      ? pageData.authorizeCustomer.sourcePath2
+      : '';
+  const authorizeTargetPath2 =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.targetPath2 !== undefined
+      ? pageData.authorizeCustomer.targetPath2
+      : '';
+  const authorizeSourcePath3 =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.sourcePath3 !== undefined
+      ? pageData.authorizeCustomer.sourcePath3
+      : '';
+  const authorizeTargetPath3 =
+    pageData.authorizeCustomer && pageData.authorizeCustomer.targetPath3 !== undefined
+      ? pageData.authorizeCustomer.targetPath3
+      : '';
   const operationAuthorizeCustomer = pageData.authorizeCustomer?.operationName ?? operations.authorizeCustomer;
 
   return {
@@ -154,7 +174,11 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
       operation_authorize_customer: operationAuthorizeCustomer,
       enable_authorize_customer: authorizeEnabled,
       authorize_customer_source_path: authorizeSourcePath,
-      authorize_customer_target_path: authorizeTargetPath
+      authorize_customer_target_path: authorizeTargetPath,
+      authorize_customer_source_path_2: authorizeSourcePath2,
+      authorize_customer_target_path_2: authorizeTargetPath2,
+      authorize_customer_source_path_3: authorizeSourcePath3,
+      authorize_customer_target_path_3: authorizeTargetPath3
     },
     customer_data: {
       id: pageData.customer && pageData.customer.id !== undefined ? pageData.customer.id : null,

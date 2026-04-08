@@ -198,3 +198,33 @@ test('maps client id to customer.ids.websiteID when configured', async ({ page }
     }
   });
 });
+
+test('maps multiple authorize path pairs into one operation payload', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index',
+    customer: {
+      id: 888,
+      phone: '+79990001122',
+      authorized: true
+    },
+    authorizeCustomer: {
+      enabled: true,
+      sourcePath: 'id',
+      targetPath: 'customer.ids.websiteID',
+      sourcePath2: 'phone',
+      targetPath2: 'customer.mobilePhone'
+    }
+  });
+
+  await expectAsyncCallsCount(page, 1);
+  const [authorizeCall] = await getAsyncCalls(page);
+  expect(authorizeCall.payload && authorizeCall.payload.operation).toBe('Website.AuthorizeCustomer');
+  expect(authorizeCall.payload && authorizeCall.payload.data).toEqual({
+    customer: {
+      ids: {
+        websiteID: '888'
+      },
+      mobilePhone: '+79990001122'
+    }
+  });
+});

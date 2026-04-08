@@ -3,6 +3,7 @@ import {
   AUTHORIZE_CUSTOMER_RETRY_DELAY_MS,
   AUTHORIZE_CUSTOMER_SESSION_KEY
 } from './constants';
+import { resolveAuthorizePathPairs } from './config';
 import type { MindboxWidgetConfig, MindboxInSalesWidgetState, TimerLike, WidgetWindow } from './contracts';
 import { formatAuthorizeSourceValue, getValueByPath, setValueByPath } from './pathUtils';
 import type { SendOperation } from './operationSender';
@@ -138,10 +139,9 @@ const isAuthorizeConfigReady = (config: MindboxWidgetConfig | null): boolean => 
   }
 
   const operationName = config.operations && config.operations.authorizeCustomer;
-  const sourcePath = config.authorizeCustomer.sourcePath || '';
-  const targetPath = config.authorizeCustomer.targetPath || '';
+  const pathPairs = resolveAuthorizePathPairs(config.authorizeCustomer);
 
-  return Boolean(operationName && sourcePath && targetPath);
+  return Boolean(operationName && pathPairs.length > 0);
 };
 
 export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): void => {
@@ -158,8 +158,7 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
   }
 
   const operationName = config!.operations!.authorizeCustomer!;
-  const sourcePath = config!.authorizeCustomer!.sourcePath!;
-  const targetPath = config!.authorizeCustomer!.targetPath!;
+  const pathPairs = resolveAuthorizePathPairs(config!.authorizeCustomer);
 
   const trySend = async (): Promise<boolean> => {
     const raw = await getRawClientPayload(deps.windowRef);
@@ -167,14 +166,25 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
       return false;
     }
 
-    const extracted = getValueByPath(raw, sourcePath);
-    const stringValue = formatAuthorizeSourceValue(extracted, sourcePath);
-    if (!stringValue) {
+    const data: Record<string, unknown> = {};
+    const dedupeParts: string[] = [];
+
+    for (const pair of pathPairs) {
+      const extracted = getValueByPath(raw, pair.sourcePath);
+      const stringValue = formatAuthorizeSourceValue(extracted, pair.sourcePath);
+      if (!stringValue) {
+        continue;
+      }
+      setValueByPath(data, pair.targetPath, stringValue);
+      dedupeParts.push(`${pair.targetPath}=${stringValue}`);
+    }
+
+    if (dedupeParts.length === 0) {
       return false;
     }
 
-    const data = setValueByPath({}, targetPath, stringValue);
-    return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, operationName, data, stringValue);
+    const dedupeKey = dedupeParts.join('\u001e');
+    return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, operationName, data, dedupeKey);
   };
 
   void trySend().then((isSent) => {

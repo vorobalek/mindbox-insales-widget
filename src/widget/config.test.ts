@@ -32,7 +32,12 @@ describe('config', () => {
     expect(config.authorizeCustomer).toEqual({
       enabled: false,
       sourcePath: '',
-      targetPath: ''
+      targetPath: '',
+      sourcePath2: '',
+      targetPath2: '',
+      sourcePath3: '',
+      targetPath3: '',
+      pathPairs: []
     });
     expect(config.isValid).toBe(true);
     expect(config.missingSettings).toEqual([]);
@@ -77,7 +82,12 @@ describe('config', () => {
     expect(config.authorizeCustomer).toEqual({
       enabled: true,
       sourcePath: 'phone',
-      targetPath: 'customer.mobilePhone'
+      targetPath: 'customer.mobilePhone',
+      sourcePath2: '',
+      targetPath2: '',
+      sourcePath3: '',
+      targetPath3: '',
+      pathPairs: [{ sourcePath: 'phone', targetPath: 'customer.mobilePhone' }]
     });
     expect(config.operations!.authorizeCustomer).toBe('Website.AuthorizeCustomer');
   });
@@ -98,6 +108,36 @@ describe('config', () => {
 
     expect(config.isValid).toBe(true);
     expect(config.missingSettings).toEqual([]);
+  });
+
+  it('collects multiple authorize path pairs and skips incomplete rows', () => {
+    const config = normalizeAndValidateConfig({
+      apiDomain: 'api.mindbox.ru',
+      idKey: 'website',
+      operations: {
+        viewCategory: '',
+        viewProduct: '',
+        setCart: '',
+        clearCart: '',
+        setWishList: '',
+        clearWishList: '',
+        authorizeCustomer: 'Auth'
+      },
+      authorizeCustomer: {
+        enabled: true,
+        sourcePath: 'id',
+        targetPath: 'customer.ids.websiteID',
+        sourcePath2: 'phone',
+        targetPath2: 'customer.mobilePhone',
+        sourcePath3: 'missing',
+        targetPath3: ''
+      }
+    })!;
+
+    expect(config.authorizeCustomer!.pathPairs).toEqual([
+      { sourcePath: 'id', targetPath: 'customer.ids.websiteID' },
+      { sourcePath: 'phone', targetPath: 'customer.mobilePhone' }
+    ]);
   });
 
   it('creates ids object with dynamic key', () => {

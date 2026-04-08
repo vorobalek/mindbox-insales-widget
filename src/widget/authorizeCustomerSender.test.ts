@@ -85,15 +85,17 @@ describe('startAuthorizeCustomerFlow', () => {
     });
     expect(stateRef).toEqual({
       authorizeCustomerSent: true,
-      lastAuthorizedWebsiteId: '+79000000001'
+      lastAuthorizedWebsiteId: 'customer.ids.websiteID=+79000000001'
     });
-    expect(storageMap.get(AUTHORIZE_CUSTOMER_SESSION_KEY)).toBe('+79000000001');
+    expect(storageMap.get(AUTHORIZE_CUSTOMER_SESSION_KEY)).toBe('customer.ids.websiteID=+79000000001');
     expect(setIntervalFn).not.toHaveBeenCalled();
   });
 
   it('does not send duplicate when session storage matches dedupe key', async () => {
     const sendOperation = vi.fn();
-    const storageMap = new Map<string, string>([[AUTHORIZE_CUSTOMER_SESSION_KEY, '+79000000001']]);
+    const storageMap = new Map<string, string>([
+      [AUTHORIZE_CUSTOMER_SESSION_KEY, 'customer.ids.websiteID=+79000000001']
+    ]);
     const storage = {
       getItem: (key: string) => storageMap.get(key) || null,
       setItem: (key: string, value: string) => {
@@ -126,7 +128,67 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(sendOperation).not.toHaveBeenCalled();
     expect(stateRef).toEqual({
       authorizeCustomerSent: true,
-      lastAuthorizedWebsiteId: '+79000000001'
+      lastAuthorizedWebsiteId: 'customer.ids.websiteID=+79000000001'
+    });
+  });
+
+  it('merges multiple path pairs and uses composite dedupe key', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+    const clearIntervalFn = vi.fn();
+    const storageMap = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => storageMap.get(key) || null,
+      setItem: (key: string, value: string) => {
+        storageMap.set(key, value);
+      }
+    };
+
+    const windowRef = {
+      ajaxAPI: {
+        shop: {
+          client: {
+            get: () => createDeferred({ id: 42, phone: ' +7 (900) 000-00-02 ' })
+          }
+        }
+      }
+    } as WidgetWindow;
+
+    const stateRef = {};
+    const getConfig = vi.fn(() => ({
+      apiDomain: 'api.mindbox.ru',
+      idKey: 'website',
+      operations: { authorizeCustomer: 'Website.AuthorizeCustomer' },
+      authorizeCustomer: {
+        enabled: true,
+        sourcePath: 'id',
+        targetPath: 'customer.ids.websiteID',
+        sourcePath2: 'phone',
+        targetPath2: 'customer.mobilePhone'
+      }
+    }));
+
+    startAuthorizeCustomerFlow({
+      windowRef,
+      stateRef,
+      sendOperation,
+      getConfig,
+      storage,
+      setIntervalFn,
+      clearIntervalFn
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
+      customer: {
+        ids: { websiteID: '42' },
+        mobilePhone: '+79000000002'
+      }
+    });
+    expect(stateRef).toMatchObject({
+      authorizeCustomerSent: true,
+      lastAuthorizedWebsiteId: 'customer.ids.websiteID=42\u001ecustomer.mobilePhone=+79000000002'
     });
   });
 
