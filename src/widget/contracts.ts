@@ -15,10 +15,20 @@ export interface MindboxWidgetPage {
   productPrice?: string | number | null;
 }
 
+export interface AuthorizeCustomerPathPair {
+  sourcePath: string;
+  targetPath: string;
+}
+
 export interface MindboxWidgetAuthorizeCustomer {
   enabled?: boolean | string | number;
   sourcePath?: string;
   targetPath?: string;
+  sourcePath2?: string;
+  targetPath2?: string;
+  sourcePath3?: string;
+  targetPath3?: string;
+  pathPairs?: AuthorizeCustomerPathPair[];
 }
 
 export interface MindboxWidgetConfig {

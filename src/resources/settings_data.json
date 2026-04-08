@@ -13,5 +13,9 @@
   "operation_authorize_customer": "Website.AuthorizeCustomer",
   "enable_authorize_customer": false,
   "authorize_customer_source_path": "",
-  "authorize_customer_target_path": ""
+  "authorize_customer_target_path": "",
+  "authorize_customer_source_path_2": "",
+  "authorize_customer_target_path_2": "",
+  "authorize_customer_source_path_3": "",
+  "authorize_customer_target_path_3": ""
 }

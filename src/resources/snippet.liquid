@@ -12,6 +12,10 @@
 {%- endif -%}
 {%- assign mindbox_authorize_source_path = widget_settings.authorize_customer_source_path | default: '' | strip -%}
 {%- assign mindbox_authorize_target_path = widget_settings.authorize_customer_target_path | default: '' | strip -%}
+{%- assign mindbox_authorize_source_path_2 = widget_settings.authorize_customer_source_path_2 | default: '' | strip -%}
+{%- assign mindbox_authorize_target_path_2 = widget_settings.authorize_customer_target_path_2 | default: '' | strip -%}
+{%- assign mindbox_authorize_source_path_3 = widget_settings.authorize_customer_source_path_3 | default: '' | strip -%}
+{%- assign mindbox_authorize_target_path_3 = widget_settings.authorize_customer_target_path_3 | default: '' | strip -%}
 {%- assign mindbox_service_worker_path = widget_settings.service_worker_path | default: '' | strip -%}
 {%- assign mindbox_service_worker_scope = widget_settings.service_worker_scope | default: '' | strip -%}
 {%- capture mindbox_create_options -%}
@@ -50,7 +54,11 @@
         authorizeCustomer: {
           enabled: {% if mindbox_enable_authorize_customer %}true{% else %}false{% endif %},
           sourcePath: {{ mindbox_authorize_source_path | json }},
-          targetPath: {{ mindbox_authorize_target_path | json }}
+          targetPath: {{ mindbox_authorize_target_path | json }},
+          sourcePath2: {{ mindbox_authorize_source_path_2 | json }},
+          targetPath2: {{ mindbox_authorize_target_path_2 | json }},
+          sourcePath3: {{ mindbox_authorize_source_path_3 | json }},
+          targetPath3: {{ mindbox_authorize_target_path_3 | json }}
         },
         page: {
           template: {{ template | json }},

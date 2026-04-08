@@ -100,14 +100,38 @@
         {
           "name": "authorize_customer_source_path",
           "type": "text",
-          "label": "Путь к значению в JSON клиента",
-          "hint": "Точечный путь от корня ответа ajaxAPI.shop.client.get(), например phone или id."
+          "label": "Пара 1: путь к значению в JSON клиента",
+          "hint": "Точечный путь от корня ответа ajaxAPI.shop.client.get(), например phone или id. Пара не используется, если пустой source или target."
         },
         {
           "name": "authorize_customer_target_path",
           "type": "text",
-          "label": "Путь в теле операции (data)",
+          "label": "Пара 1: путь в теле операции (data)",
           "hint": "Точечный путь в объекте data, например customer.mobilePhone или customer.ids.websiteID."
+        },
+        {
+          "name": "authorize_customer_source_path_2",
+          "type": "text",
+          "label": "Пара 2: путь к значению в JSON клиента",
+          "hint": "Дополнительный идентификатор. Пара не используется, если пустой source или target."
+        },
+        {
+          "name": "authorize_customer_target_path_2",
+          "type": "text",
+          "label": "Пара 2: путь в теле операции (data)",
+          "hint": "Точечный путь в объекте data для второй пары."
+        },
+        {
+          "name": "authorize_customer_source_path_3",
+          "type": "text",
+          "label": "Пара 3: путь к значению в JSON клиента",
+          "hint": "Дополнительный идентификатор. Пара не используется, если пустой source или target."
+        },
+        {
+          "name": "authorize_customer_target_path_3",
+          "type": "text",
+          "label": "Пара 3: путь в теле операции (data)",
+          "hint": "Точечный путь в объекте data для третьей пары."
         }
       ]
     }
