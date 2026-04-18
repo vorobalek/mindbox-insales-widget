@@ -147,6 +147,18 @@ test('does not send duplicate setWishList when favorites payload is unchanged', 
   await expectAsyncCallsCount(page, 1);
 });
 
+test('does not send duplicate clearWishList when favorites payload is unchanged', async ({ page }) => {
+  await openWidgetPage(page, {
+    template: 'index'
+  });
+
+  await emitEvent(page, FAVORITES_EVENT, { products: [] });
+  await expectAsyncCallsCount(page, 1);
+
+  await emitEvent(page, FAVORITES_EVENT, { products: [] });
+  await expectAsyncCallsCount(page, 1);
+});
+
 test('sends Website.AuthorizeCustomer with phone mapped to customer.mobilePhone', async ({ page }) => {
   await openWidgetPage(page, {
     template: 'index',
