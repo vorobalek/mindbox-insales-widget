@@ -7,6 +7,49 @@
     (function() {
       const subscribers = {};
       window.__mindboxCalls = [];
+      window.__mindboxConsoleLogs = [];
+      const serializeConsoleArg = function(value) {
+        if (value instanceof Error) {
+          return {
+            name: value.name,
+            message: value.message,
+            stack: value.stack
+          };
+        }
+
+        if (typeof value === 'undefined') {
+          return '[undefined]';
+        }
+
+        if (typeof value === 'function') {
+          return '[function ' + (value.name || 'anonymous') + ']';
+        }
+
+        if (typeof value === 'symbol') {
+          return value.toString();
+        }
+
+        return value;
+      };
+      ['log', 'info', 'warn', 'error'].forEach(function(level) {
+        const original = console[level];
+        if (typeof original !== 'function') {
+          return;
+        }
+
+        console[level] = function() {
+          window.__mindboxConsoleLogs.push({
+            level: level,
+            args: Array.prototype.slice.call(arguments).map(serializeConsoleArg)
+          });
+
+          if (typeof window.__updateE2eDebugBlocks === 'function') {
+            window.__updateE2eDebugBlocks();
+          }
+
+          return original.apply(this, arguments);
+        };
+      });
       const customerData = {
         id: {% if customer_data and customer_data.id != nil %}{{ customer_data.id | json }}{% else %}null{% endif %},
         phone: {% if customer_data and customer_data.phone != nil %}{{ customer_data.phone | json }}{% else %}null{% endif %},

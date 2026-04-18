@@ -5,6 +5,10 @@
 
   const mindboxMock = (command, payload) => {
     calls.push({ command, payload });
+    if (typeof window.__updateE2eDebugBlocks === 'function') {
+      const updateDebugBlocks = window.__updateE2eDebugBlocks.bind(window);
+      updateDebugBlocks();
+    }
   };
 
   window.mindbox = mindboxMock;

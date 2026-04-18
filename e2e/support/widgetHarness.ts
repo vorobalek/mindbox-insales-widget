@@ -19,6 +19,11 @@ export interface MindboxCall {
   };
 }
 
+export interface MindboxConsoleLog {
+  level: string;
+  args: unknown[];
+}
+
 export interface LiquidPageData {
   template?: 'index' | 'collection' | 'product';
   collectionId?: string | number | null;
@@ -54,6 +59,14 @@ export interface WidgetCustomerData {
   id?: string | number | null;
   phone?: string | null;
   authorized?: boolean;
+}
+
+interface E2eDebugWindow extends Window {
+  __emitEventBus?: (eventName: string, payload: unknown) => void;
+  __mindboxCalls?: MindboxCall[];
+  __mindboxConsoleLogs?: MindboxConsoleLog[];
+  __setCustomerData?: (customerData: WidgetCustomerData) => void;
+  __updateE2eDebugBlocks?: () => void;
 }
 
 interface LiquidRuntime {
@@ -205,107 +218,143 @@ const createEntrypointHtml = async (pageData: LiquidPageData = {}): Promise<stri
   return liquidRuntime.renderFile(ENTRYPOINT_TEMPLATE_NAME, getLiquidScope(pageData));
 };
 
-const attachRenderedHtmlDebugBlock = async (page: Page, renderedHtml: string): Promise<void> => {
+const attachDebugDashboard = async (page: Page, renderedHtml: string): Promise<void> => {
   await page.evaluate((html) => {
-    const blockId = '__e2e-rendered-html-debug';
-    const preId = `${blockId}-pre`;
-    const codeId = `${blockId}-code`;
+    const dashboardId = '__e2e-debug-dashboard';
+    const body = document.body || document.documentElement;
+    const debugWindow = window as E2eDebugWindow;
 
-    let debugBlock = document.getElementById(blockId) as HTMLDetailsElement | null;
-    if (!debugBlock) {
-      debugBlock = document.createElement('details');
-      debugBlock.id = blockId;
-      debugBlock.open = true;
-      debugBlock.style.margin = '16px';
-      debugBlock.style.padding = '8px 12px';
-      debugBlock.style.border = '1px solid #d1d5db';
-      debugBlock.style.borderRadius = '8px';
-      debugBlock.style.background = '#f8fafc';
-      debugBlock.style.color = '#111827';
-      debugBlock.style.boxSizing = 'border-box';
-      debugBlock.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+    const stringifyDebugData = (value: unknown): string => {
+      const seenObjects: unknown[] = [];
+      return JSON.stringify(
+        value,
+        (_key, currentValue) => {
+          if (typeof currentValue === 'undefined') {
+            return '[undefined]';
+          }
 
-      const summary = document.createElement('summary');
-      summary.textContent = 'Rendered page HTML (e2e debug)';
-      summary.style.cursor = 'pointer';
-      summary.style.fontWeight = '600';
-      summary.style.marginBottom = '8px';
+          if (typeof currentValue === 'function') {
+            return `[function ${currentValue.name || 'anonymous'}]`;
+          }
 
-      const pre = document.createElement('pre');
-      pre.id = preId;
-      pre.style.margin = '8px 0 0';
-      pre.style.padding = '12px';
-      pre.style.overflow = 'auto';
-      pre.style.maxHeight = '50vh';
-      pre.style.background = '#ffffff';
-      pre.style.border = '1px solid #e5e7eb';
-      pre.style.borderRadius = '6px';
-      pre.style.boxSizing = 'border-box';
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.style.wordBreak = 'break-word';
+          if (typeof currentValue === 'symbol') {
+            return currentValue.toString();
+          }
 
-      const code = document.createElement('code');
-      code.id = codeId;
-      pre.append(code);
-      debugBlock.append(summary, pre);
-    }
+          if (currentValue instanceof Error) {
+            return {
+              name: currentValue.name,
+              message: currentValue.message,
+              stack: currentValue.stack
+            };
+          }
 
-    const applyLayout = () => {
-      const preElement = debugBlock!.querySelector(`#${preId}`) as HTMLPreElement | null;
-      if (!preElement) {
-        return;
-      }
+          if (currentValue && typeof currentValue === 'object') {
+            if (seenObjects.includes(currentValue)) {
+              return '[Circular]';
+            }
+            seenObjects.push(currentValue);
+          }
 
-      if (debugBlock!.open) {
-        debugBlock!.style.position = 'fixed';
-        debugBlock!.style.inset = '0';
-        debugBlock!.style.margin = '0';
-        debugBlock!.style.padding = '12px';
-        debugBlock!.style.borderRadius = '0';
-        debugBlock!.style.zIndex = '2147483647';
-        debugBlock!.style.display = 'flex';
-        debugBlock!.style.flexDirection = 'column';
-        debugBlock!.style.overflow = 'hidden';
-
-        preElement.style.margin = '12px 0 0';
-        preElement.style.flex = '1';
-        preElement.style.minHeight = '0';
-        preElement.style.height = 'calc(100vh - 72px)';
-        preElement.style.maxHeight = 'calc(100vh - 72px)';
-      } else {
-        debugBlock!.style.position = 'fixed';
-        debugBlock!.style.inset = '16px 16px auto 16px';
-        debugBlock!.style.margin = '0';
-        debugBlock!.style.padding = '8px 12px';
-        debugBlock!.style.borderRadius = '8px';
-        debugBlock!.style.zIndex = '2147483647';
-        debugBlock!.style.display = 'block';
-        debugBlock!.style.overflow = 'visible';
-
-        preElement.style.margin = '8px 0 0';
-        preElement.style.flex = '0 1 auto';
-        preElement.style.minHeight = 'auto';
-        preElement.style.height = 'auto';
-        preElement.style.maxHeight = '50vh';
-      }
+          return currentValue;
+        },
+        2
+      );
     };
 
-    if (debugBlock.dataset.layoutBound !== 'true') {
-      debugBlock.addEventListener('toggle', applyLayout);
-      debugBlock.dataset.layoutBound = 'true';
+    const createDebugSection = (
+      root: HTMLElement,
+      sectionId: string,
+      title: string,
+      initialContent: string
+    ): HTMLCodeElement => {
+      let section = document.getElementById(sectionId) as HTMLDetailsElement | null;
+      if (!section) {
+        section = document.createElement('details');
+        section.id = sectionId;
+        section.open = true;
+        section.style.border = '1px solid #d1d5db';
+        section.style.borderRadius = '8px';
+        section.style.background = '#f8fafc';
+        section.style.boxSizing = 'border-box';
+        section.style.overflow = 'hidden';
+
+        const summary = document.createElement('summary');
+        summary.textContent = title;
+        summary.style.cursor = 'pointer';
+        summary.style.fontWeight = '600';
+        summary.style.padding = '8px 10px';
+        summary.style.background = '#e5eefb';
+
+        const pre = document.createElement('pre');
+        pre.style.margin = '0';
+        pre.style.padding = '10px';
+        pre.style.maxHeight = '24vh';
+        pre.style.overflow = 'auto';
+        pre.style.background = '#ffffff';
+        pre.style.borderTop = '1px solid #d1d5db';
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.wordBreak = 'break-word';
+
+        const code = document.createElement('code');
+        code.dataset.debugCode = 'true';
+        pre.append(code);
+        section.append(summary, pre);
+        root.append(section);
+      }
+
+      const codeElement = section.querySelector('[data-debug-code="true"]') as HTMLCodeElement | null;
+      if (!codeElement) {
+        throw new Error(`Missing debug code element for ${sectionId}`);
+      }
+
+      codeElement.textContent = initialContent;
+      return codeElement;
+    };
+
+    let dashboard = document.getElementById(dashboardId) as HTMLElement | null;
+    if (!dashboard) {
+      dashboard = document.createElement('aside');
+      dashboard.id = dashboardId;
+      dashboard.style.position = 'fixed';
+      dashboard.style.inset = '0';
+      dashboard.style.padding = '12px';
+      dashboard.style.display = 'flex';
+      dashboard.style.flexDirection = 'column';
+      dashboard.style.gap = '8px';
+      dashboard.style.overflow = 'auto';
+      dashboard.style.maxHeight = '100vh';
+      dashboard.style.zIndex = '2147483647';
+      dashboard.style.boxSizing = 'border-box';
+      dashboard.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      dashboard.style.background = 'rgba(248, 250, 252, 0.96)';
+      dashboard.style.border = '0';
+      dashboard.style.borderRadius = '0';
+      dashboard.style.boxShadow = '0 12px 32px rgba(15, 23, 42, 0.18)';
+      body.prepend(dashboard);
     }
 
-    applyLayout();
+    const renderedHtmlCode = createDebugSection(dashboard, '__e2e-rendered-html-debug', 'Rendered Page HTML', html);
+    const mindboxCallsCode = createDebugSection(
+      dashboard,
+      '__e2e-mindbox-calls-debug',
+      'Mocked Mindbox Calls',
+      stringifyDebugData(debugWindow.__mindboxCalls || [])
+    );
+    const consoleLogsCode = createDebugSection(
+      dashboard,
+      '__e2e-console-logs-debug',
+      'Widget Console Logs',
+      stringifyDebugData(debugWindow.__mindboxConsoleLogs || [])
+    );
 
-    const codeElement = debugBlock.querySelector(`#${codeId}`);
-    if (codeElement) {
-      codeElement.textContent = html;
-    }
+    renderedHtmlCode.textContent = html;
+    debugWindow.__updateE2eDebugBlocks = () => {
+      mindboxCallsCode.textContent = stringifyDebugData(debugWindow.__mindboxCalls || []);
+      consoleLogsCode.textContent = stringifyDebugData(debugWindow.__mindboxConsoleLogs || []);
+    };
 
-    const body = document.body || document.documentElement;
-    if (!debugBlock.isConnected) {
-      body.prepend(debugBlock);
-    }
+    debugWindow.__updateE2eDebugBlocks();
   }, renderedHtml);
 };
 
@@ -327,12 +376,18 @@ export const openWidgetPage = async (page: Page, pageData: LiquidPageData = {}):
   await page.setContent(entrypointHtml, {
     waitUntil: 'domcontentloaded'
   });
-  await attachRenderedHtmlDebugBlock(page, entrypointHtml);
+  await attachDebugDashboard(page, entrypointHtml);
 };
 
 export const getCalls = async (page: Page): Promise<MindboxCall[]> => {
   return page.evaluate(() => {
-    return (window as Window & { __mindboxCalls?: MindboxCall[] }).__mindboxCalls || [];
+    return (window as E2eDebugWindow).__mindboxCalls || [];
+  });
+};
+
+export const getConsoleLogs = async (page: Page): Promise<MindboxConsoleLog[]> => {
+  return page.evaluate(() => {
+    return (window as E2eDebugWindow).__mindboxConsoleLogs || [];
   });
 };
 
@@ -352,8 +407,7 @@ export const expectAsyncCallsCount = async (page: Page, count: number): Promise<
 export const emitEvent = async (page: Page, eventName: string, payload: unknown): Promise<void> => {
   await page.evaluate(
     ({ name, body }) => {
-      const emit = (window as Window & { __emitEventBus?: (eventName: string, payload: unknown) => void })
-        .__emitEventBus;
+      const emit = (window as E2eDebugWindow).__emitEventBus;
       if (typeof emit === 'function') {
         emit(name, body);
       }
@@ -367,11 +421,7 @@ export const emitEvent = async (page: Page, eventName: string, payload: unknown)
 
 export const setCustomerData = async (page: Page, customerData: WidgetCustomerData): Promise<void> => {
   await page.evaluate((nextCustomerData) => {
-    const setCustomer = (
-      window as Window & {
-        __setCustomerData?: (customerData: WidgetCustomerData) => void;
-      }
-    ).__setCustomerData;
+    const setCustomer = (window as E2eDebugWindow).__setCustomerData;
 
     if (typeof setCustomer === 'function') {
       setCustomer(nextCustomerData);
