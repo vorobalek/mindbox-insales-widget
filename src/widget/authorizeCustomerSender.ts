@@ -4,7 +4,7 @@ import {
   AUTHORIZE_CUSTOMER_SESSION_KEY
 } from './constants';
 import { resolveAuthorizePathPairs } from './config';
-import type { MindboxWidgetConfig, MindboxInSalesWidgetState, TimerLike, WidgetWindow } from './contracts';
+import type { MindboxWidgetConfig, MindboxInSalesWidgetState, TimerLike } from './contracts';
 import { formatAuthorizeSourceValue, getValueByPath, setValueByPath } from './pathUtils';
 import type { SendOperation } from './operationSender';
 
@@ -13,8 +13,10 @@ interface StorageLike {
   setItem: (key: string, value: string) => void;
 }
 
+type InSalesClientGetter = () => unknown;
+
 export interface AuthorizeCustomerSenderDeps extends TimerLike {
-  windowRef: WidgetWindow;
+  getClient?: InSalesClientGetter;
   stateRef: MindboxInSalesWidgetState;
   sendOperation: SendOperation;
   getConfig: () => MindboxWidgetConfig | null;
@@ -143,7 +145,7 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
     return;
   }
 
-  const getClient = deps.windowRef.ajaxAPI?.shop?.client?.get;
+  const getClient = deps.getClient;
   if (typeof getClient !== 'function') {
     return;
   }

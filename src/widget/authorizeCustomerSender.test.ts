@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AUTHORIZE_CUSTOMER_SESSION_KEY } from './constants';
 import { startAuthorizeCustomerFlow } from './authorizeCustomerSender';
-import type { MindboxWidgetConfig, JQueryDeferredLike, WidgetWindow } from './contracts';
+import type { MindboxWidgetConfig, JQueryDeferredLike } from './contracts';
 
 const createDeferred = (payload: unknown, shouldFail = false): JQueryDeferredLike<unknown> => {
   return {
@@ -33,9 +33,13 @@ const baseAuthorizeConfig = (): MindboxWidgetConfig => ({
   }
 });
 
+const createGetClient = (result: unknown): (() => unknown) => {
+  return () => result;
+};
+
 const settleAsyncFlow = (): Promise<void> =>
   new Promise((resolve) => {
-    setImmediate(resolve);
+    setTimeout(resolve, 0);
   });
 
 describe('startAuthorizeCustomerFlow', () => {
@@ -51,21 +55,13 @@ describe('startAuthorizeCustomerFlow', () => {
       }
     };
 
-    const windowRef = {
-      ajaxAPI: {
-        shop: {
-          client: {
-            get: () => createDeferred({ id: 15, phone: ' +7 (900) 000-00-01 ' })
-          }
-        }
-      }
-    } as WidgetWindow;
+    const getClient = createGetClient(createDeferred({ id: 15, phone: ' +7 (900) 000-00-01 ' }));
 
     const stateRef = {};
     const getConfig = vi.fn(() => baseAuthorizeConfig());
 
     startAuthorizeCustomerFlow({
-      windowRef,
+      getClient,
       stateRef,
       sendOperation,
       getConfig,
@@ -102,20 +98,12 @@ describe('startAuthorizeCustomerFlow', () => {
         storageMap.set(key, value);
       }
     };
-    const windowRef = {
-      ajaxAPI: {
-        shop: {
-          client: {
-            get: () => createDeferred({ id: 15, phone: '+79000000001' })
-          }
-        }
-      }
-    } as WidgetWindow;
+    const getClient = createGetClient(createDeferred({ id: 15, phone: '+79000000001' }));
     const stateRef = {};
     const getConfig = vi.fn(() => baseAuthorizeConfig());
 
     startAuthorizeCustomerFlow({
-      windowRef,
+      getClient,
       stateRef,
       sendOperation,
       getConfig,
@@ -140,15 +128,7 @@ describe('startAuthorizeCustomerFlow', () => {
     };
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => createDeferred({ id: 15, phone: '+79000000001' })
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({ id: 15, phone: '+79000000001' })),
       stateRef,
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -172,15 +152,7 @@ describe('startAuthorizeCustomerFlow', () => {
     };
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => createDeferred({ id: 15, phone: '+79000000001' })
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({ id: 15, phone: '+79000000001' })),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -205,15 +177,7 @@ describe('startAuthorizeCustomerFlow', () => {
     const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => 0
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(0),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -232,15 +196,7 @@ describe('startAuthorizeCustomerFlow', () => {
     const sendOperation = vi.fn();
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => Promise.resolve({ id: 31 })
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(Promise.resolve({ id: 31 })),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => ({
@@ -272,15 +228,7 @@ describe('startAuthorizeCustomerFlow', () => {
     const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => createDeferred({ phone: '   ' })
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({ phone: '   ' })),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -305,15 +253,7 @@ describe('startAuthorizeCustomerFlow', () => {
     const clearIntervalFn = vi.fn();
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => createDeferred({}, true)
-            }
-          }
-        }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({}, true)),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => ({
@@ -344,20 +284,12 @@ describe('startAuthorizeCustomerFlow', () => {
     const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => ({
-                fail: (callback: (error: unknown) => void) => {
-                  callback(new Error('Not authorized'));
-                  return {};
-                }
-              })
-            }
-          }
+      getClient: () => ({
+        fail: (callback: (error: unknown) => void) => {
+          callback(new Error('Not authorized'));
+          return {};
         }
-      } as WidgetWindow,
+      }),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -376,29 +308,21 @@ describe('startAuthorizeCustomerFlow', () => {
     const sendOperation = vi.fn();
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get: () => ({
-                done: (callback: (result: unknown) => void) => {
-                  callback({ id: 31 });
-                  return {
-                    fail: (failCallback: (error: unknown) => void) => {
-                      failCallback(new Error('late failure'));
-                      return {};
-                    }
-                  };
-                },
-                fail: (callback: (error: unknown) => void) => {
-                  callback(new Error('late failure'));
-                  return {};
-                }
-              })
+      getClient: () => ({
+        done: (callback: (result: unknown) => void) => {
+          callback({ id: 31 });
+          return {
+            fail: (failCallback: (error: unknown) => void) => {
+              failCallback(new Error('late failure'));
+              return {};
             }
-          }
+          };
+        },
+        fail: (callback: (error: unknown) => void) => {
+          callback(new Error('late failure'));
+          return {};
         }
-      } as WidgetWindow,
+      }),
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => ({
@@ -437,15 +361,7 @@ describe('startAuthorizeCustomerFlow', () => {
       }
     };
 
-    const windowRef = {
-      ajaxAPI: {
-        shop: {
-          client: {
-            get: () => createDeferred({ id: 42, phone: ' +7 (900) 000-00-02 ' })
-          }
-        }
-      }
-    } as WidgetWindow;
+    const getClient = createGetClient(createDeferred({ id: 42, phone: ' +7 (900) 000-00-02 ' }));
 
     const stateRef = {};
     const getConfig = vi.fn(() => ({
@@ -462,7 +378,7 @@ describe('startAuthorizeCustomerFlow', () => {
     }));
 
     startAuthorizeCustomerFlow({
-      windowRef,
+      getClient,
       stateRef,
       sendOperation,
       getConfig,
@@ -494,9 +410,7 @@ describe('startAuthorizeCustomerFlow', () => {
     }));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: { shop: { client: { get: () => createDeferred({ phone: '1' }) } } }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({ phone: '1' })),
       stateRef: {},
       sendOperation,
       getConfig,
@@ -518,9 +432,7 @@ describe('startAuthorizeCustomerFlow', () => {
     }));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: { shop: { client: { get: () => createDeferred({ phone: '1' }) } } }
-      } as WidgetWindow,
+      getClient: createGetClient(createDeferred({ phone: '1' })),
       stateRef: {},
       sendOperation,
       getConfig,
@@ -532,11 +444,10 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(sendOperation).not.toHaveBeenCalled();
   });
 
-  it('does nothing when ajaxAPI is unavailable', () => {
+  it('does nothing when customer getter is unavailable', () => {
     const sendOperation = vi.fn();
     const setIntervalFn = vi.fn();
     startAuthorizeCustomerFlow({
-      windowRef: {},
       stateRef: {},
       sendOperation,
       getConfig: vi.fn(() => baseAuthorizeConfig()),
@@ -577,15 +488,7 @@ describe('startAuthorizeCustomerFlow', () => {
     }));
 
     startAuthorizeCustomerFlow({
-      windowRef: {
-        ajaxAPI: {
-          shop: {
-            client: {
-              get
-            }
-          }
-        }
-      },
+      getClient: get,
       stateRef: {},
       sendOperation,
       getConfig,

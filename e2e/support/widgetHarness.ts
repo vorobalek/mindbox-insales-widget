@@ -47,11 +47,13 @@ export interface LiquidPageData {
     targetPath3?: string;
     operationName?: string | null;
   };
-  customer?: {
-    id?: string | number | null;
-    phone?: string | null;
-    authorized?: boolean;
-  };
+  customer?: WidgetCustomerData;
+}
+
+export interface WidgetCustomerData {
+  id?: string | number | null;
+  phone?: string | null;
+  authorized?: boolean;
 }
 
 interface LiquidRuntime {
@@ -361,4 +363,18 @@ export const emitEvent = async (page: Page, eventName: string, payload: unknown)
       body: payload
     }
   );
+};
+
+export const setCustomerData = async (page: Page, customerData: WidgetCustomerData): Promise<void> => {
+  await page.evaluate((nextCustomerData) => {
+    const setCustomer = (
+      window as Window & {
+        __setCustomerData?: (customerData: WidgetCustomerData) => void;
+      }
+    ).__setCustomerData;
+
+    if (typeof setCustomer === 'function') {
+      setCustomer(nextCustomerData);
+    }
+  }, customerData);
 };

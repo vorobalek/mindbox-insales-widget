@@ -50,7 +50,7 @@ export const initializeWidget = (deps: InitializeWidgetDeps): Promise<void> => {
   });
 
   startAuthorizeCustomerFlow({
-    windowRef: deps.windowRef,
+    getClient: deps.windowRef.ajaxAPI?.shop?.client?.get,
     stateRef,
     sendOperation,
     getConfig,
