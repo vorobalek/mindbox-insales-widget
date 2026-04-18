@@ -73,12 +73,7 @@ const isPromiseLike = (input: unknown): input is Promise<unknown> => {
   return typeof (input as Promise<unknown>).then === 'function';
 };
 
-const getRawClientPayload = async (windowRef: WidgetWindow): Promise<unknown | null> => {
-  const getClient = windowRef.ajaxAPI?.shop?.client?.get;
-  if (typeof getClient !== 'function') {
-    return null;
-  }
-
+const getRawClientPayload = async (getClient: () => unknown): Promise<unknown | null> => {
   const result = getClient();
   if (isPromiseLike(result)) {
     return result;
@@ -114,10 +109,6 @@ const sendAuthorizeCustomer = (
   data: Record<string, unknown>,
   dedupeKey: string
 ): boolean => {
-  if (!dedupeKey) {
-    return false;
-  }
-
   if (stateRef.authorizeCustomerSent && stateRef.lastAuthorizedWebsiteId === dedupeKey) {
     return true;
   }
@@ -152,8 +143,8 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
     return;
   }
 
-  const hasClientGetter = typeof deps.windowRef.ajaxAPI?.shop?.client?.get === 'function';
-  if (!hasClientGetter) {
+  const getClient = deps.windowRef.ajaxAPI?.shop?.client?.get;
+  if (typeof getClient !== 'function') {
     return;
   }
 
@@ -161,7 +152,7 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
   const pathPairs = resolveAuthorizePathPairs(config!.authorizeCustomer);
 
   const trySend = async (): Promise<boolean> => {
-    const raw = await getRawClientPayload(deps.windowRef);
+    const raw = await getRawClientPayload(getClient);
     if (raw === null || raw === undefined) {
       return false;
     }

@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { createIds, normalizeAndValidateConfig } from './config';
+import { createIds, normalizeAndValidateConfig, resolveAuthorizePathPairs } from './config';
 
 describe('config', () => {
+  it('returns empty authorize path pairs when authorize config is missing', () => {
+    expect(resolveAuthorizePathPairs(undefined)).toEqual([]);
+  });
+
+  it('returns predefined authorize path pairs without recomputing them', () => {
+    const pathPairs = [{ sourcePath: 'id', targetPath: 'customer.ids.websiteID' }];
+
+    expect(
+      resolveAuthorizePathPairs({
+        enabled: true,
+        sourcePath: 'ignored',
+        targetPath: 'ignored',
+        pathPairs
+      })
+    ).toBe(pathPairs);
+  });
+
   it('returns null when config is missing', () => {
     expect(normalizeAndValidateConfig(undefined)).toBeNull();
   });
@@ -90,6 +107,32 @@ describe('config', () => {
       pathPairs: [{ sourcePath: 'phone', targetPath: 'customer.mobilePhone' }]
     });
     expect(config.operations!.authorizeCustomer).toBe('Website.AuthorizeCustomer');
+  });
+
+  it('treats alternate checkbox truthy values as enabled', () => {
+    expect(
+      normalizeAndValidateConfig({
+        apiDomain: 'api.mindbox.ru',
+        idKey: 'website',
+        authorizeCustomer: { enabled: '1' }
+      })!.authorizeCustomer!.enabled
+    ).toBe(true);
+
+    expect(
+      normalizeAndValidateConfig({
+        apiDomain: 'api.mindbox.ru',
+        idKey: 'website',
+        authorizeCustomer: { enabled: 'yes' }
+      })!.authorizeCustomer!.enabled
+    ).toBe(true);
+
+    expect(
+      normalizeAndValidateConfig({
+        apiDomain: 'api.mindbox.ru',
+        idKey: 'website',
+        authorizeCustomer: { enabled: 'on' }
+      })!.authorizeCustomer!.enabled
+    ).toBe(true);
   });
 
   it('treats all operations as optional, including wishlist operations', () => {

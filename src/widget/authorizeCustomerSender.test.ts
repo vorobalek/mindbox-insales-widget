@@ -132,6 +132,299 @@ describe('startAuthorizeCustomerFlow', () => {
     });
   });
 
+  it('does not send duplicate when state already contains matching dedupe key', async () => {
+    const sendOperation = vi.fn();
+    const stateRef = {
+      authorizeCustomerSent: true,
+      lastAuthorizedWebsiteId: 'customer.ids.websiteID=+79000000001'
+    };
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => createDeferred({ id: 15, phone: '+79000000001' })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef,
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn: vi.fn(() => setInterval(() => undefined, 60_000)),
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+  });
+
+  it('sends authorize operation when reading dedupe key from storage throws', async () => {
+    const sendOperation = vi.fn();
+    const storage = {
+      getItem: vi.fn(() => {
+        throw new Error('storage read failed');
+      }),
+      setItem: vi.fn()
+    };
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => createDeferred({ id: 15, phone: '+79000000001' })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage,
+      setIntervalFn: vi.fn(() => setInterval(() => undefined, 60_000)),
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
+      customer: {
+        ids: {
+          websiteID: '+79000000001'
+        }
+      }
+    });
+  });
+
+  it('starts retry flow when customer getter returns a non-async primitive value', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => 0
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts promise-like customer payloads', async () => {
+    const sendOperation = vi.fn();
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => Promise.resolve({ id: 31 })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn: vi.fn(() => setInterval(() => undefined, 60_000)),
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
+      customer: {
+        ids: {
+          websiteID: '31'
+        }
+      }
+    });
+  });
+
+  it('starts retry flow when all extracted authorize values are empty after normalization', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => createDeferred({ phone: '   ' })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps retry timer running while authorize payload is still unavailable', async () => {
+    const sendOperation = vi.fn();
+    let tick: (() => void) | null = null;
+    const setIntervalFn = vi.fn((callback: () => void) => {
+      tick = callback;
+      return setInterval(() => undefined, 60_000);
+    });
+    const clearIntervalFn = vi.fn();
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => createDeferred({}, true)
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn
+    });
+
+    await settleAsyncFlow();
+    expect(tick).not.toBeNull();
+
+    tick!();
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(clearIntervalFn).not.toHaveBeenCalled();
+  });
+
+  it('treats fail-only deferred payloads as retryable misses', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => ({
+                fail: (callback: (error: unknown) => void) => {
+                  callback(new Error('Not authorized'));
+                  return {};
+                }
+              })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores repeated deferred completion after payload has already settled', async () => {
+    const sendOperation = vi.fn();
+
+    startAuthorizeCustomerFlow({
+      windowRef: {
+        ajaxAPI: {
+          shop: {
+            client: {
+              get: () => ({
+                done: (callback: (result: unknown) => void) => {
+                  callback({ id: 31 });
+                  return {
+                    fail: (failCallback: (error: unknown) => void) => {
+                      failCallback(new Error('late failure'));
+                      return {};
+                    }
+                  };
+                },
+                fail: (callback: (error: unknown) => void) => {
+                  callback(new Error('late failure'));
+                  return {};
+                }
+              })
+            }
+          }
+        }
+      } as WidgetWindow,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn: vi.fn(() => setInterval(() => undefined, 60_000)),
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
+      customer: {
+        ids: {
+          websiteID: '31'
+        }
+      }
+    });
+  });
+
   it('merges multiple path pairs and uses composite dedupe key', async () => {
     const sendOperation = vi.fn();
     const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));

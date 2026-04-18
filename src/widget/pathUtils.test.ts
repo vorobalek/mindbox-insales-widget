@@ -20,9 +20,23 @@ describe('pathUtils', () => {
     });
   });
 
+  it('returns undefined for non-object path segments and leaves root unchanged for empty target path', () => {
+    const root = { customer: null, items: [] };
+    const target = { customer: { mobilePhone: '+7900' } };
+
+    expect(getValueByPath(root, 'customer.id')).toBeUndefined();
+    expect(getValueByPath(root, 'items.id')).toBeUndefined();
+    expect(setValueByPath(target, '', 'ignored')).toBe(target);
+    expect(target).toEqual({ customer: { mobilePhone: '+7900' } });
+  });
+
   it('formatAuthorizeSourceValue normalizes phone segment', () => {
     expect(formatAuthorizeSourceValue(' +7 (900) 00-00-00 ', 'phone')).toBe('+7900000000');
     expect(formatAuthorizeSourceValue(101, 'id')).toBe('101');
     expect(formatAuthorizeSourceValue(null, 'phone')).toBe('');
+  });
+
+  it('trims authorize source values when source path is empty', () => {
+    expect(formatAuthorizeSourceValue('  value  ', '')).toBe('value');
   });
 });
