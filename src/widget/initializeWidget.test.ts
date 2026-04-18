@@ -235,6 +235,35 @@ describe('initializeWidget', () => {
     expect(windowRef.__mindboxInSalesWidget?.state?.eventsBound).toBe(true);
   });
 
+  it('uses global sessionStorage when it is available', async () => {
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn()
+    };
+
+    vi.stubGlobal('sessionStorage', storage);
+
+    try {
+      const windowRef = {
+        __mindboxInSalesWidget: {
+          config: createValidConfig()
+        }
+      } as WidgetWindow;
+
+      await initializeWidget({
+        windowRef,
+        eventBus: { subscribe: vi.fn() },
+        setIntervalFn: asSetIntervalFn(vi.fn()),
+        clearIntervalFn: asClearIntervalFn(vi.fn()),
+        consoleLike: { error: vi.fn() }
+      });
+
+      expect(windowRef.__mindboxInSalesWidget?.state?.eventsBound).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('retries binding and stops timer after successful retry', async () => {
     let intervalCallback: (() => void) | null = null;
     const timerId = createTimerId();

@@ -7,6 +7,15 @@ import {
 } from './syncFingerprint';
 
 describe('syncFingerprint', () => {
+  it('keeps duplicate cart ids stable when fingerprint sorting compares equal ids', () => {
+    expect(
+      fingerprintFromCartOrderLines([
+        { id: 1, quantity: 1, sale_price: 10 },
+        { id: '1', quantity: 2, sale_price: 20 }
+      ])
+    ).toBe('[{"extId":"1","count":1,"price":10},{"extId":"1","count":2,"price":20}]');
+  });
+
   it('builds stable cart fingerprint regardless of order_lines order', () => {
     const a = fingerprintFromCartOrderLines([
       { id: 2, quantity: 1, sale_price: 10 },
@@ -76,5 +85,11 @@ describe('syncFingerprint', () => {
     const stateRef: { lastCartSyncFingerprint?: string } = {};
     writeStoredFingerprint(storage, 'k', stateRef, 'lastCartSyncFingerprint', 'fp2');
     expect(stateRef.lastCartSyncFingerprint).toBe('fp2');
+  });
+
+  it('writeStoredFingerprint updates state when storage is unavailable', () => {
+    const stateRef: { lastWishlistSyncFingerprint?: string } = {};
+    writeStoredFingerprint(undefined, 'k', stateRef, 'lastWishlistSyncFingerprint', 'fp3');
+    expect(stateRef.lastWishlistSyncFingerprint).toBe('fp3');
   });
 });
