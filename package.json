@@ -45,7 +45,7 @@
     "browserslist": "^4.28.2",
     "browserslist-to-esbuild": "^2.1.1",
     "esbuild": "^0.28.0",
-    "eslint": "^10.2.1",
+    "eslint": "^10.3.0",
     "globals": "^17.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
