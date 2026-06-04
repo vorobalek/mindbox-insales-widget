@@ -93,9 +93,9 @@ jobs:
 
       - name: Install Playwright browser
         if: steps.version.outputs.should_release == 'true'
-        uses: microsoft/playwright-actions@v1
-        with:
-          node-version: 22
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
 
       - name: Run e2e tests
         if: steps.version.outputs.should_release == 'true'
