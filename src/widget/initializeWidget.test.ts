@@ -20,6 +20,21 @@ const createValidConfig = () => {
   };
 };
 
+const createAuthorizeConfig = () => {
+  return {
+    ...createValidConfig(),
+    operations: {
+      ...createValidConfig().operations,
+      authorizeCustomer: 'Website.AuthorizeCustomer'
+    },
+    authorizeCustomer: {
+      enabled: true,
+      sourcePath: 'id',
+      targetPath: 'customer.ids.websiteID'
+    }
+  };
+};
+
 const createTimerId = (): ReturnType<typeof setInterval> => {
   const timerId = setInterval(() => undefined, 60_000);
   clearInterval(timerId);
@@ -145,6 +160,78 @@ describe('initializeWidget', () => {
     });
 
     expect(mindbox).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps sending anonymous events when the authorize customer getter rejects', async () => {
+    const handlers = new Map<string, (data: unknown) => void>();
+    const subscribe = vi.fn((eventName: string, handler: (data: unknown) => void) => {
+      handlers.set(eventName, handler);
+    });
+    const mindbox = vi.fn();
+    const consoleLike = { error: vi.fn() };
+    const setIntervalFn = vi.fn();
+    // Mirrors the production inSales client getter for anonymous visitors: a
+    // thenable that rejects with the "Not authorized" payload.
+    const clientGet = vi.fn(() =>
+      Promise.reject({
+        message: 'Not authorized',
+        url: 'client_account/session/new',
+        authorized: false,
+        status: 'error'
+      })
+    );
+    const windowRef = {
+      __mindboxInSalesWidget: {
+        config: createAuthorizeConfig()
+      },
+      mindbox,
+      ajaxAPI: {
+        shop: {
+          client: {
+            get: clientGet
+          }
+        }
+      }
+    } as WidgetWindow;
+
+    await initializeWidget({
+      windowRef,
+      eventBus: { subscribe },
+      setIntervalFn: asSetIntervalFn(setIntervalFn),
+      clearIntervalFn: asClearIntervalFn(vi.fn()),
+      consoleLike
+    });
+
+    // Let the rejected authorize promise settle so an unhandled rejection would surface.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(clientGet).toHaveBeenCalled();
+    // Subscriptions are bound and the anonymous page view is still delivered.
+    expect(windowRef.__mindboxInSalesWidget?.state?.eventsBound).toBe(true);
+    expect(mindbox).toHaveBeenCalledWith(
+      'async',
+      expect.objectContaining({
+        operation: 'Website.ViewCategory'
+      })
+    );
+
+    handlers.get('update_items:insales:cart:light')!({
+      order_lines: [{ id: 100, quantity: 2, sale_price: 999 }]
+    });
+    expect(mindbox).toHaveBeenCalledWith(
+      'async',
+      expect.objectContaining({
+        operation: 'Website.SetCart'
+      })
+    );
+
+    // The authorize operation is never sent for an anonymous visitor, and the
+    // failed lookup does not log a config error.
+    const authorizeCalls = mindbox.mock.calls.filter(
+      (call) => (call[1] as { operation?: string }).operation === 'Website.AuthorizeCustomer'
+    );
+    expect(authorizeCalls).toHaveLength(0);
+    expect(consoleLike.error).not.toHaveBeenCalled();
   });
 
   it('initializes with empty operations and skips sending events', async () => {

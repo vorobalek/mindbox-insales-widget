@@ -53,6 +53,10 @@ export interface LiquidPageData {
     operationName?: string | null;
   };
   customer?: WidgetCustomerData;
+  // Controls how the mocked inSales ajaxAPI.shop.client.get() behaves.
+  // 'deferred' (default) returns a jQuery-style deferred; 'reject-promise'
+  // returns a rejecting thenable, mirroring production for anonymous visitors.
+  clientGetMode?: 'deferred' | 'reject-promise';
 }
 
 export interface WidgetCustomerData {
@@ -200,6 +204,7 @@ const getLiquidScope = (pageData: LiquidPageData = {}) => {
       phone: pageData.customer && pageData.customer.phone !== undefined ? pageData.customer.phone : null,
       authorized: pageData.customer && pageData.customer.authorized !== undefined ? pageData.customer.authorized : false
     },
+    client_get_reject: pageData.clientGetMode === 'reject-promise',
     template,
     collection:
       pageData.collectionId === undefined || pageData.collectionId === null ? null : { id: pageData.collectionId },
@@ -267,7 +272,7 @@ const attachDebugDashboard = async (page: Page, renderedHtml: string): Promise<v
       sectionId: string,
       title: string,
       initialContent: string
-    ): HTMLCodeElement => {
+    ): HTMLElement => {
       let section = document.getElementById(sectionId) as HTMLDetailsElement | null;
       if (!section) {
         section = document.createElement('details');
@@ -303,7 +308,7 @@ const attachDebugDashboard = async (page: Page, renderedHtml: string): Promise<v
         root.append(section);
       }
 
-      const codeElement = section.querySelector('[data-debug-code="true"]') as HTMLCodeElement | null;
+      const codeElement = section.querySelector('[data-debug-code="true"]') as HTMLElement | null;
       if (!codeElement) {
         throw new Error(`Missing debug code element for ${sectionId}`);
       }

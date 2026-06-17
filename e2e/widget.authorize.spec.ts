@@ -93,6 +93,38 @@ test('retries until customer data becomes available after page load and stops af
   expect((await getAsyncCalls(page)).length).toBe(1);
 });
 
+test('keeps sending anonymous events without a crash when the client getter rejects', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => {
+    pageErrors.push(error);
+  });
+
+  await openWidgetPage(page, {
+    template: 'collection',
+    collectionId: 42,
+    // The inSales client getter rejects with "Not authorized" for anonymous visitors.
+    clientGetMode: 'reject-promise',
+    authorizeCustomer: {
+      enabled: true,
+      sourcePath: 'phone',
+      targetPath: 'customer.mobilePhone'
+    }
+  });
+
+  // The anonymous page view is still delivered despite the rejected client lookup.
+  await expectAsyncCallsCount(page, 1);
+
+  const calls = await getAsyncCalls(page);
+  expect(calls[0].payload && calls[0].payload.operation).toBe('Website.ViewCategory');
+  // The authorize operation is never sent for an anonymous visitor.
+  expect(calls.some((call) => call.payload && call.payload.operation === 'Website.AuthorizeCustomer')).toBe(false);
+
+  // Give the rejected promise time to surface as an uncaught error if unhandled.
+  await page.waitForTimeout(200);
+  expect((await getAsyncCalls(page)).length).toBe(1);
+  expect(pageErrors).toEqual([]);
+});
+
 test('does not send duplicate authorize operation for the same customer value within one browser session', async ({
   page
 }) => {
