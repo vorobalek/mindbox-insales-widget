@@ -84,10 +84,20 @@
           customerData.authorized = Boolean(nextCustomerData.authorized);
         }
       };
+      const clientGetReject = {% if client_get_reject %}true{% else %}false{% endif %};
       window.ajaxAPI = {
         shop: {
           client: {
             get: function() {
+              if (clientGetReject) {
+                return Promise.reject({
+                  message: 'Not authorized',
+                  url: 'client_account/session/new',
+                  authorized: false,
+                  status: 'error'
+                });
+              }
+
               const payload = {
                 id: customerData.id,
                 phone: customerData.phone

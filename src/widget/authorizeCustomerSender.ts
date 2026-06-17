@@ -76,9 +76,22 @@ const isPromiseLike = (input: unknown): input is Promise<unknown> => {
 };
 
 const getRawClientPayload = async (getClient: () => unknown): Promise<unknown | null> => {
-  const result = getClient();
+  let result: unknown;
+  try {
+    result = getClient();
+  } catch {
+    return null;
+  }
+
   if (isPromiseLike(result)) {
-    return result;
+    // The inSales client getter resolves to a promise/thenable that rejects for
+    // anonymous visitors (e.g. { message: 'Not authorized' }). Treat a rejection
+    // as a retryable miss instead of letting it escape as an unhandled rejection.
+    try {
+      return await result;
+    } catch {
+      return null;
+    }
   }
 
   if (!isDeferredLike(result)) {
@@ -154,30 +167,37 @@ export const startAuthorizeCustomerFlow = (deps: AuthorizeCustomerSenderDeps): v
   const pathPairs = resolveAuthorizePathPairs(config!.authorizeCustomer);
 
   const trySend = async (): Promise<boolean> => {
-    const raw = await getRawClientPayload(getClient);
-    if (raw === null || raw === undefined) {
-      return false;
-    }
-
-    const data: Record<string, unknown> = {};
-    const dedupeParts: string[] = [];
-
-    for (const pair of pathPairs) {
-      const extracted = getValueByPath(raw, pair.sourcePath);
-      const stringValue = formatAuthorizeSourceValue(extracted, pair.sourcePath);
-      if (!stringValue) {
-        continue;
+    // Guard the whole authorize flow: any failure here (rejected client getter,
+    // path extraction, send) must surface as a retryable miss so the widget
+    // keeps delivering anonymous events instead of crashing the init pipeline.
+    try {
+      const raw = await getRawClientPayload(getClient);
+      if (raw === null || raw === undefined) {
+        return false;
       }
-      setValueByPath(data, pair.targetPath, stringValue);
-      dedupeParts.push(`${pair.targetPath}=${stringValue}`);
-    }
 
-    if (dedupeParts.length === 0) {
+      const data: Record<string, unknown> = {};
+      const dedupeParts: string[] = [];
+
+      for (const pair of pathPairs) {
+        const extracted = getValueByPath(raw, pair.sourcePath);
+        const stringValue = formatAuthorizeSourceValue(extracted, pair.sourcePath);
+        if (!stringValue) {
+          continue;
+        }
+        setValueByPath(data, pair.targetPath, stringValue);
+        dedupeParts.push(`${pair.targetPath}=${stringValue}`);
+      }
+
+      if (dedupeParts.length === 0) {
+        return false;
+      }
+
+      const dedupeKey = dedupeParts.join('\u001e');
+      return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, operationName, data, dedupeKey);
+    } catch {
       return false;
     }
-
-    const dedupeKey = dedupeParts.join('\u001e');
-    return sendAuthorizeCustomer(deps.stateRef, deps.sendOperation, storage, operationName, data, dedupeKey);
   };
 
   void trySend().then((isSent) => {

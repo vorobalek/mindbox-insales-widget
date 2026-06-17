@@ -460,6 +460,152 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(setIntervalFn).not.toHaveBeenCalled();
   });
 
+  it('treats a rejecting promise customer payload as a retryable miss without throwing', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+    const clearIntervalFn = vi.fn();
+
+    startAuthorizeCustomerFlow({
+      // The real inSales ajaxAPI.shop.client.get() resolves to a thenable that
+      // rejects for anonymous visitors. It must not escape as an unhandled rejection.
+      getClient: createGetClient(
+        Promise.reject({
+          message: 'Not authorized',
+          url: 'client_account/session/new',
+          authorized: false,
+          status: 'error'
+        })
+      ),
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+    expect(clearIntervalFn).not.toHaveBeenCalled();
+  });
+
+  it('recovers and sends once the customer promise resolves after an earlier rejection', async () => {
+    let callIndex = 0;
+    const get = vi.fn(() => {
+      callIndex += 1;
+      if (callIndex < 2) {
+        return Promise.reject({ message: 'Not authorized', authorized: false, status: 'error' });
+      }
+
+      return Promise.resolve({ id: 31 });
+    });
+    const sendOperation = vi.fn();
+    let tick: (() => void) | null = null;
+    const setIntervalFn = vi.fn((callback: () => void) => {
+      tick = callback;
+      return setInterval(() => undefined, 60_000);
+    });
+    const clearIntervalFn = vi.fn();
+
+    startAuthorizeCustomerFlow({
+      getClient: get,
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(tick).not.toBeNull();
+
+    tick!();
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledTimes(1);
+    expect(sendOperation).toHaveBeenCalledWith('Website.AuthorizeCustomer', {
+      customer: {
+        ids: {
+          websiteID: '31'
+        }
+      }
+    });
+    expect(clearIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a synchronous throw from the customer getter as a retryable miss', async () => {
+    const sendOperation = vi.fn();
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+
+    startAuthorizeCustomerFlow({
+      getClient: () => {
+        throw new Error('ajaxAPI unavailable');
+      },
+      stateRef: {},
+      sendOperation,
+      getConfig: vi.fn(() => baseAuthorizeConfig()),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).not.toHaveBeenCalled();
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a throwing sendOperation as a retryable miss without escaping the flow', async () => {
+    const sendOperation = vi.fn(() => {
+      throw new Error('tracker exploded');
+    });
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+    const stateRef = {};
+
+    startAuthorizeCustomerFlow({
+      getClient: createGetClient(createDeferred({ id: 31 })),
+      stateRef,
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledTimes(1);
+    // The throw is swallowed: state is not marked sent and a retry is scheduled.
+    expect(stateRef).toEqual({});
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
   it('retries and sends once customer appears', async () => {
     let callIndex = 0;
     const get = vi.fn(() => {
