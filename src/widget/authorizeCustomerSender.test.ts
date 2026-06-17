@@ -574,6 +574,38 @@ describe('startAuthorizeCustomerFlow', () => {
     expect(setIntervalFn).toHaveBeenCalledTimes(1);
   });
 
+  it('treats a throwing sendOperation as a retryable miss without escaping the flow', async () => {
+    const sendOperation = vi.fn(() => {
+      throw new Error('tracker exploded');
+    });
+    const setIntervalFn = vi.fn(() => setInterval(() => undefined, 60_000));
+    const stateRef = {};
+
+    startAuthorizeCustomerFlow({
+      getClient: createGetClient(createDeferred({ id: 31 })),
+      stateRef,
+      sendOperation,
+      getConfig: vi.fn(() => ({
+        ...baseAuthorizeConfig(),
+        authorizeCustomer: {
+          enabled: true,
+          sourcePath: 'id',
+          targetPath: 'customer.ids.websiteID'
+        }
+      })),
+      storage: undefined,
+      setIntervalFn,
+      clearIntervalFn: vi.fn()
+    });
+
+    await settleAsyncFlow();
+
+    expect(sendOperation).toHaveBeenCalledTimes(1);
+    // The throw is swallowed: state is not marked sent and a retry is scheduled.
+    expect(stateRef).toEqual({});
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+  });
+
   it('retries and sends once customer appears', async () => {
     let callIndex = 0;
     const get = vi.fn(() => {
