@@ -52,7 +52,7 @@
     "liquidjs": "^10.27.1",
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",
-    "vite": "^8.1.1",
+    "vite": "^8.1.5",
     "vitest": "^4.1.9"
   }
 }
