@@ -41,7 +41,7 @@
     "@types/node": "^26.4.1",
     "@typescript-eslint/eslint-plugin": "^8.69.0",
     "@typescript-eslint/parser": "^8.69.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.0",
     "browserslist": "^4.28.8",
     "browserslist-to-esbuild": "^2.1.1",
     "esbuild": "^0.28.2",
