@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MESSAGE_EVENTBUS_UNAVAILABLE, MESSAGE_MISSING_SETTINGS } from './constants';
 import type { EventBusLike, WidgetWindow } from './contracts';
 import { initializeWidget, type InitializeWidgetDeps } from './initializeWidget';
@@ -48,6 +48,13 @@ const asSetIntervalFn = (fn: unknown): SetIntervalFn => fn as SetIntervalFn;
 const asClearIntervalFn = (fn: unknown): ClearIntervalFn => fn as ClearIntervalFn;
 
 describe('initializeWidget', () => {
+  beforeEach(() => {
+    // Each test represents a new visitor session, including on Node.js with native Web Storage.
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+  });
+
   it('returns early when config is missing', async () => {
     const setIntervalFn = vi.fn();
 
